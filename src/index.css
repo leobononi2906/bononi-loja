@@ -1,0 +1,218 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap');
+
+@layer base {
+  :root {
+    /* === BONONI Design System (HSL) === */
+    /* Backgrounds */
+    --background: 218 30% 96%;            /* #F0F3F8 */
+    --foreground: 217 56% 13%;            /* #0F1D35 */
+
+    --card: 0 0% 100%;                    /* #FFFFFF */
+    --card-foreground: 217 56% 13%;
+    --surface2: 215 38% 97%;              /* #F7F9FC */
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 217 56% 13%;
+
+    /* Bononi blues */
+    --primary: 222 70% 33%;               /* #1A3A8F */
+    --primary-foreground: 0 0% 100%;
+    --blue-mid: 204 100% 40%;             /* #0077CC */
+    --blue-light: 196 100% 47%;           /* #00AAEE */
+    --blue-pale: 205 89% 95%;             /* #E8F4FD */
+
+    --secondary: 218 30% 92%;
+    --secondary-foreground: 217 56% 13%;
+
+    --muted: 215 38% 95%;
+    --muted-foreground: 217 18% 44%;      /* #5A6A85 */
+    --text-muted: 220 15% 67%;            /* #9AA5B8 */
+
+    --accent: 196 100% 47%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 4 70% 50%;             /* #D93025 */
+    --destructive-foreground: 0 0% 100%;
+    --destructive-bg: 4 81% 96%;          /* #FEF0EF */
+
+    --success: 158 87% 34%;               /* #0F9D6E */
+    --success-foreground: 0 0% 100%;
+    --success-bg: 158 60% 94%;            /* #E8F8F3 */
+
+    --warning: 32 100% 44%;               /* #E07B00 */
+    --warning-foreground: 0 0% 100%;
+    --warning-bg: 38 92% 95%;             /* #FEF5E7 */
+
+    --yellow: 30 91% 36%;                 /* #B45309 */
+    --yellow-bg: 48 100% 96%;             /* #FFFBEB */
+
+    --info: 204 100% 40%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 215 32% 92%;                /* #E2E8F2 */
+    --input: 215 32% 92%;
+    --ring: 222 70% 33%;
+
+    --radius: 0.75rem;                    /* 12px */
+    --radius-sm: 0.5rem;                  /* 8px */
+
+    --chart-revenue: 222 70% 33%;
+    --chart-services: 158 87% 34%;
+    --chart-margin: 32 100% 44%;
+    --chart-growth-up: 158 87% 34%;
+    --chart-growth-down: 4 70% 50%;
+
+    /* Sidebar: deep Bononi blue */
+    --sidebar-background: 222 70% 33%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 196 100% 47%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 60% 28%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 222 50% 25%;
+    --sidebar-ring: 196 100% 47%;
+
+    --font-display: 'DM Sans', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+    --font-mono: 'DM Mono', ui-monospace, monospace;
+  }
+
+  .dark {
+    --background: 220 30% 8%;
+    --foreground: 0 0% 95%;
+    --card: 220 25% 12%;
+    --card-foreground: 0 0% 95%;
+    --surface2: 220 25% 14%;
+    --popover: 220 25% 12%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 222 70% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 20% 18%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 220 20% 16%;
+    --muted-foreground: 220 10% 65%;
+    --text-muted: 220 10% 55%;
+    --accent: 196 100% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 4 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 20% 20%;
+    --input: 220 20% 20%;
+    --ring: 222 70% 55%;
+    --sidebar-background: 222 60% 10%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 196 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 50% 16%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 222 50% 18%;
+    --sidebar-ring: 196 100% 50%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+    font-feature-settings: 'ss01', 'cv11';
+  }
+  h1, h2, h3, h4, h5, h6 { font-family: var(--font-display); }
+  .font-mono, .mono { font-family: var(--font-mono); }
+}
+
+@layer components {
+  /* === KPI / Metric Card === */
+  .metric-card {
+    @apply bg-card rounded-xl border p-[18px] shadow-sm transition-all duration-200;
+  }
+  .metric-card:hover { box-shadow: 0 4px 16px rgba(15,29,53,0.08), 0 2px 4px rgba(15,29,53,0.04); }
+
+  .metric-value {
+    font-family: var(--font-mono);
+    @apply text-[26px] font-bold tracking-tight text-foreground leading-none;
+    letter-spacing: -0.5px;
+  }
+  .metric-label {
+    @apply text-[11px] font-semibold uppercase tracking-wider;
+    color: hsl(var(--text-muted));
+  }
+  .metric-sub {
+    @apply text-xs text-muted-foreground mt-1;
+  }
+  .metric-change-up { color: hsl(var(--success)); }
+  .metric-change-down { color: hsl(var(--destructive)); }
+
+  /* === Containers === */
+  .chart-container {
+    @apply bg-card rounded-xl border p-5 shadow-sm;
+  }
+  .table-card {
+    @apply bg-card rounded-xl border shadow-sm overflow-hidden;
+  }
+  .table-card-header {
+    @apply px-5 py-3.5 border-b flex items-center justify-between;
+  }
+  .table-card-title {
+    @apply text-[13px] font-semibold text-foreground;
+  }
+
+  .filter-bar {
+    @apply bg-card border-b px-6 py-3 flex items-center gap-4 flex-wrap;
+  }
+  .dashboard-section {
+    @apply p-5;
+  }
+
+  /* === Data table === */
+  .data-table {
+    @apply w-full border-collapse text-[13px];
+  }
+  .data-table th {
+    @apply px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-left;
+    color: hsl(var(--text-muted));
+    background: hsl(var(--surface2));
+    border-bottom: 1px solid hsl(var(--border));
+  }
+  .data-table td {
+    @apply px-4 py-2.5;
+    border-bottom: 1px solid hsl(var(--border));
+  }
+  .data-table tr:hover td { background: hsl(var(--surface2)); }
+  .data-table td.right, .data-table th.right { text-align: right; }
+  .data-table td.mono { font-family: var(--font-mono); font-size: 12.5px; }
+
+  /* === Badges === */
+  .b-badge {
+    @apply inline-flex items-center text-[10.5px] font-bold uppercase tracking-wider px-2 py-0.5 rounded;
+  }
+  .b-badge-ok      { background: hsl(var(--success-bg));   color: hsl(var(--success)); }
+  .b-badge-critico { background: hsl(var(--warning-bg));   color: hsl(var(--warning)); }
+  .b-badge-baixo   { background: hsl(var(--yellow-bg));    color: hsl(var(--yellow)); }
+  .b-badge-ruptura { background: hsl(var(--destructive-bg)); color: hsl(var(--destructive)); }
+  .b-badge-info    { background: hsl(var(--blue-pale));    color: hsl(var(--blue-mid)); }
+  .b-badge-muted   { background: hsl(var(--surface2));     color: hsl(var(--muted-foreground)); }
+
+  /* === Bononi sidebar item === */
+  .b-nav-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-all duration-150;
+    color: rgba(255, 255, 255, 0.65);
+  }
+  .b-nav-item:hover {
+    color: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .b-nav-item.active {
+    background: rgba(0, 170, 238, 0.18);
+    color: hsl(var(--blue-light));
+    box-shadow: inset 3px 0 0 hsl(var(--blue-light));
+  }
+  .b-nav-label {
+    @apply text-[10px] font-bold uppercase tracking-[0.12em] px-3 mb-1.5 mt-4;
+    color: rgba(255, 255, 255, 0.35);
+  }
+}
