@@ -65,19 +65,19 @@ function topName(name: string, size = 18) {
 export function ComercialVendedoresTab({ filters }: Props) {
   const [selectedSeller, setSelectedSeller] = useState("TODOS");
 
-  const docsFat = useViewData("vw_comercial_docs_faturados", filters, 15000);
-  const osBase = useViewData("vw_os_base_fat_corrigido", filters, 15000, { dateCol: "data_faturamento_corrigida" });
-  const osEntrada = useViewData("vw_os_base", filters, 8000, { dateCol: "data_entrada" });
-  const dimVendedor = useViewData("vw_loja_vendedores", filters, 50000, { skipDate: true, skipTipoSaida: true });
-  const dimCliente = useViewData("vw_dim_cliente", filters, 80000, {
+  const docsFat = useViewData("vw_comercial_docs_faturados", filters, 5000);
+  const osBase = useViewData("vw_os_base_fat_corrigido", filters, 5000, { dateCol: "data_faturamento_corrigida" });
+  const osEntrada = useViewData("vw_os_base", filters, 5000, { dateCol: "data_entrada" });
+  const dimVendedor = useViewData("vw_loja_vendedores", filters, 5000, { skipDate: true, skipTipoSaida: true });
+  const dimCliente = useViewData("vw_dim_cliente", filters, 5000, {
     skipDate: true,
     skipTipoSaida: true,
     columns: "id_cliente,nome_cliente",
   });
 
-  const itens = useViewData("vw_comercial_itens_faturados", filters, 20000);
-  const osPecas = useViewData("vw_os_pecas_faturadas", filters, 20000);
-  const osServicos = useViewData("vw_os_servicos_faturados", filters, 20000);
+  const itens = useViewData("vw_comercial_itens_faturados", filters, 5000);
+  const osPecas = useViewData("vw_os_pecas_faturadas", filters, 5000);
+  const osServicos = useViewData("vw_os_servicos_faturados", filters, 5000);
 
   // Comparativo mês anterior: clampar ao mesmo dia carregado do mês atual.
   const today = new Date();
@@ -90,10 +90,10 @@ export function ComercialVendedoresTab({ filters }: Props) {
     diaInicio: 1,
     diaFim: clampDay,
   };
-  const prevDocsFat = useViewData("vw_comercial_docs_faturados", prevFilters, 15000);
-  const prevOsBase = useViewData("vw_os_base_fat_corrigido", prevFilters, 15000, { dateCol: "data_faturamento_corrigida" });
-  const prevItens = useViewData("vw_comercial_itens_faturados", prevFilters, 20000);
-  const prevOsPecas = useViewData("vw_os_pecas_faturadas", prevFilters, 20000);
+  const prevDocsFat = useViewData("vw_comercial_docs_faturados", prevFilters, 5000);
+  const prevOsBase = useViewData("vw_os_base_fat_corrigido", prevFilters, 5000, { dateCol: "data_faturamento_corrigida" });
+  const prevItens = useViewData("vw_comercial_itens_faturados", prevFilters, 5000);
+  const prevOsPecas = useViewData("vw_os_pecas_faturadas", prevFilters, 5000);
 
   const vendedorInfo = useMemo(() => buildVendedorInfo(dimVendedor.data), [dimVendedor.data]);
   const clienteNameMap = useMemo(
