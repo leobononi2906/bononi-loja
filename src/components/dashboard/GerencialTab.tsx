@@ -189,6 +189,7 @@ export function GerencialTab({ filters }: Props) {
           <MetricCard label="OS Faturadas" value={String(osFaturadasCount)} icon={<FileCheck className="h-5 w-5" />} />
           <MetricCard label="Fat. Serviços" value={formatCurrencyInt(faturamentoServicos)} icon={<DollarSign className="h-5 w-5" />} />
           <MetricCard label="Fat. Peças" value={formatCurrencyInt(faturamentoPecas)} icon={<Package className="h-5 w-5" />} />
+          <MetricCard label="M.O. Produzida" value={formatCurrencyInt(moProduzida)} icon={<DollarSign className="h-5 w-5" />} />
           <MetricCard label="OS Garantia" value={String(garantiaCount)} icon={<ShieldAlert className="h-5 w-5" />} />
         </div>
       )}
