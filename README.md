@@ -15,3 +15,5 @@ Dashboard operacional para pátio e tapeçaria da Bononi Acessórios.
 - `/servicos/patio` — Dashboard Pátio
 - `/servicos/tapecaria` — Dashboard Tapeçaria
 - `/servicos/config-colaboradores` — Configuração de setores
+
+<!-- redeploy: env vars configuradas -->
