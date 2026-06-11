@@ -53,12 +53,18 @@ export function PatioTab({ filters }: Props) {
   const patioColabIds = patioColabs.data ?? new Set();
 
   const produtividade = useViewData("vw_patio_produtividade_v2", filters);
+  // OP dos colaboradores do pátio (quem fez peça tapeçaria mas é do setor pátio)
+  const patioOp = useViewData("vw_tap_prod_v3", filters, 5000, { skipTipoSaida: true });
   const fatCol       = useViewData("vw_patio_fat_col_v2", filters);
   const produzido    = useViewData("vw_patio_produzido_v2", filters);
   const diario       = useViewData("vw_patio_diario_v2", filters);
   const servicosFat  = useViewData("vw_os_servicos_faturados", filters);
 
   // Filtra pelo setor PATIO da config
+  const patioOpData = (patioOp.data ?? []).filter(r =>
+    (patioColabIds.size === 0 || patioColabIds.has(Number(r.id_colaborador))) &&
+    String(r.tipo_lancamento || "").toUpperCase() === "PRODUTO"
+  );
   const prodData    = (produtividade.data ?? []).filter(r =>
     (Number(r.horas_trabalhadas) || 0) > 0 &&
     (patioColabIds.size === 0 || patioColabIds.has(Number(r.id_colaborador)))
@@ -105,18 +111,31 @@ export function PatioTab({ filters }: Props) {
     prodRanking as unknown as Record<string, unknown>[], "pct", "desc"
   );
 
-  const colabFatMap: Record<string, { nome: string; fat: number; horas: number }> = {};
+  // OP por colaborador do pátio
+  const opColabMap: Record<string, number> = {};
+  patioOpData.forEach(r => {
+    const nome = String(r.nome_colaborador || "-");
+    opColabMap[nome] = (opColabMap[nome] || 0) + (Number(r.produto_rateado) || 0);
+  });
+
+  const colabFatMap: Record<string, { nome: string; fat: number; op: number; total: number; horas: number }> = {};
   fatData.forEach(r => {
     const nome = String(r.nome_colaborador || "-");
-    if (!colabFatMap[nome]) colabFatMap[nome] = { nome, fat: 0, horas: 0 };
+    if (!colabFatMap[nome]) colabFatMap[nome] = { nome, fat: 0, op: 0, total: 0, horas: 0 };
     colabFatMap[nome].fat   += Number(r.fat_rateado) || 0;
     colabFatMap[nome].horas += Number(r.horas_colab) || 0;
   });
 
   const fatRanking = Object.values(colabFatMap)
-    .map(v => ({ nome: v.nome, fat: +v.fat.toFixed(2), horas: +v.horas.toFixed(1) }))
-    .sort((a, b) => b.fat - a.fat)
-    .slice(0, 20);
+    .map(v => {
+      const op    = +(opColabMap[v.nome] || 0).toFixed(2);
+      const fat   = +v.fat.toFixed(2);
+      const total = +(fat + op).toFixed(2);
+      return { nome: v.nome, fat, op, total, horas: +v.horas.toFixed(1) };
+    })
+    .filter(r => r.fat > 0 || r.op > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 30);
 
   const { sorted: sortedFat, sort: fatSort, toggle: toggleFat } = useSortable(
     fatRanking as unknown as Record<string, unknown>[], "fat", "desc"
@@ -222,9 +241,11 @@ export function PatioTab({ filters }: Props) {
                 <thead>
                   <tr className="border-b text-left">
                     <th className="pb-2 font-medium text-muted-foreground text-xs">#</th>
-                    <SortableHeader label="Colaborador"  field="nome"  sort={fatSort} onToggle={toggleFat} />
-                    <SortableHeader label="Horas"        field="horas" sort={fatSort} onToggle={toggleFat} className="text-right" />
-                    <SortableHeader label="Faturamento"  field="fat"   sort={fatSort} onToggle={toggleFat} className="text-right" />
+                    <SortableHeader label="Colaborador" field="nome"  sort={fatSort} onToggle={toggleFat} />
+                    <SortableHeader label="Horas"       field="horas" sort={fatSort} onToggle={toggleFat} className="text-right" />
+                    <SortableHeader label="Serviço"     field="fat"   sort={fatSort} onToggle={toggleFat} className="text-right" />
+                    <SortableHeader label="OP"          field="op"    sort={fatSort} onToggle={toggleFat} className="text-right" />
+                    <SortableHeader label="Total"       field="total" sort={fatSort} onToggle={toggleFat} className="text-right" />
                   </tr>
                 </thead>
                 <tbody>
@@ -233,7 +254,9 @@ export function PatioTab({ filters }: Props) {
                       <td className="py-2 text-xs text-muted-foreground">{i + 1}</td>
                       <td className="py-2 text-xs font-medium">{String(r.nome)}</td>
                       <td className="py-2 text-xs text-right">{String(r.horas)}h</td>
-                      <td className="py-2 text-xs text-right font-display font-semibold">{formatCurrency(Number(r.fat))}</td>
+                      <td className="py-2 text-xs text-right font-display">{formatCurrency(Number(r.fat))}</td>
+                      <td className="py-2 text-xs text-right font-display">{Number(r.op) > 0 ? formatCurrency(Number(r.op)) : <span className="text-muted-foreground">—</span>}</td>
+                      <td className="py-2 text-xs text-right font-display font-semibold">{formatCurrency(Number(r.total))}</td>
                     </tr>
                   ))}
                 </tbody>
