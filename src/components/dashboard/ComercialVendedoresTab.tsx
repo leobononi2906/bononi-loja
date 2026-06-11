@@ -79,21 +79,29 @@ export function ComercialVendedoresTab({ filters }: Props) {
   const osPecas = useViewData("vw_os_pecas_faturadas", filters, 5000);
   const osServicos = useViewData("vw_os_servicos_faturados", filters, 5000);
 
-  // Comparativo mês anterior: clampar ao mesmo dia carregado do mês atual.
-  const today = new Date();
-  const refIsCurrentMonth = isSameMonth(filters.mesAno, today);
-  const lastDay = getDaysInMonth(filters.mesAno);
-  const clampDay = filters.diaFim ?? (refIsCurrentMonth ? today.getDate() : lastDay);
-  const prevFilters = {
-    ...filters,
-    mesAno: subMonths(filters.mesAno, 1),
-    diaInicio: 1,
-    diaFim: clampDay,
-  };
-  const prevDocsFat = useViewData("vw_comercial_docs_faturados", prevFilters, 5000);
-  const prevOsBase = useViewData("vw_os_base_fat_corrigido", prevFilters, 5000, { dateCol: "data_faturamento_corrigida" });
-  const prevItens = useViewData("vw_comercial_itens_faturados", prevFilters, 5000);
-  const prevOsPecas = useViewData("vw_os_pecas_faturadas", prevFilters, 5000);
+  // Comparativo: média dos 3 meses anteriores ao mês atual
+  const prev1Filters = { ...filters, mesAno: subMonths(filters.mesAno, 1), diaInicio: null, diaFim: null };
+  const prev2Filters = { ...filters, mesAno: subMonths(filters.mesAno, 2), diaInicio: null, diaFim: null };
+  const prev3Filters = { ...filters, mesAno: subMonths(filters.mesAno, 3), diaInicio: null, diaFim: null };
+
+  const prev1DocsFat = useViewData("vw_comercial_docs_faturados", prev1Filters, 5000);
+  const prev2DocsFat = useViewData("vw_comercial_docs_faturados", prev2Filters, 5000);
+  const prev3DocsFat = useViewData("vw_comercial_docs_faturados", prev3Filters, 5000);
+  const prev1OsBase  = useViewData("vw_os_base_fat_corrigido", prev1Filters, 5000, { dateCol: "data_faturamento_corrigida" });
+  const prev2OsBase  = useViewData("vw_os_base_fat_corrigido", prev2Filters, 5000, { dateCol: "data_faturamento_corrigida" });
+  const prev3OsBase  = useViewData("vw_os_base_fat_corrigido", prev3Filters, 5000, { dateCol: "data_faturamento_corrigida" });
+  const prev1Itens   = useViewData("vw_comercial_itens_faturados", prev1Filters, 5000);
+  const prev2Itens   = useViewData("vw_comercial_itens_faturados", prev2Filters, 5000);
+  const prev3Itens   = useViewData("vw_comercial_itens_faturados", prev3Filters, 5000);
+  const prev1OsPecas = useViewData("vw_os_pecas_faturadas", prev1Filters, 5000);
+  const prev2OsPecas = useViewData("vw_os_pecas_faturadas", prev2Filters, 5000);
+  const prev3OsPecas = useViewData("vw_os_pecas_faturadas", prev3Filters, 5000);
+
+  // Aliases para manter compatibilidade com código existente (usa prev1 como base)
+  const prevDocsFat = prev1DocsFat;
+  const prevOsBase  = prev1OsBase;
+  const prevItens   = prev1Itens;
+  const prevOsPecas = prev1OsPecas;
 
   const vendedorInfo = useMemo(() => buildVendedorInfo(dimVendedor.data), [dimVendedor.data]);
   const clienteNameMap = useMemo(
@@ -160,10 +168,27 @@ export function ComercialVendedoresTab({ filters }: Props) {
     [docsFat.data, osBase.data, osEntrada.data, vendedorInfo]
   );
 
-  const prevMap = useMemo(
-    () => aggregateSellers(prevDocsFat.data ?? [], prevOsBase.data ?? [], []),
-    [prevDocsFat.data, prevOsBase.data, vendedorInfo]
-  );
+  // prevMap = média dos faturamentos dos 3 meses anteriores
+  const prevMap = useMemo(() => {
+    // Agrega cada mês separadamente
+    const m1 = aggregateSellers(prev1DocsFat.data ?? [], prev1OsBase.data ?? [], []);
+    const m2 = aggregateSellers(prev2DocsFat.data ?? [], prev2OsBase.data ?? [], []);
+    const m3 = aggregateSellers(prev3DocsFat.data ?? [], prev3OsBase.data ?? [], []);
+    // Une todas as chaves
+    const allIds = new Set([...m1.keys(), ...m2.keys(), ...m3.keys()]);
+    const avgMap = new Map<string, { id: string; nome: string; faturamento: number }>();
+    allIds.forEach(id => {
+      const v1 = m1.get(id)?.faturamento ?? 0;
+      const v2 = m2.get(id)?.faturamento ?? 0;
+      const v3 = m3.get(id)?.faturamento ?? 0;
+      const count = (v1 > 0 ? 1 : 0) + (v2 > 0 ? 1 : 0) + (v3 > 0 ? 1 : 0);
+      const avg = count > 0 ? (v1 + v2 + v3) / 3 : 0;
+      const nome = m1.get(id)?.nome ?? m2.get(id)?.nome ?? m3.get(id)?.nome ?? id;
+      avgMap.set(id, { id, nome, faturamento: avg });
+    });
+    return avgMap as unknown as ReturnType<typeof aggregateSellers>;
+  }, [prev1DocsFat.data, prev2DocsFat.data, prev3DocsFat.data,
+      prev1OsBase.data, prev2OsBase.data, prev3OsBase.data, vendedorInfo]);
 
   const sellers = useMemo(() => {
     return Array.from(currentMap.values())
@@ -226,7 +251,19 @@ export function ComercialVendedoresTab({ filters }: Props) {
 
   const clientLists = useMemo(() => {
     const cur = aggregateBySellerClient(docsFat.data ?? [], osBase.data ?? []);
-    const prev = aggregateBySellerClient(prevDocsFat.data ?? [], prevOsBase.data ?? []);
+    // Média dos 3 meses anteriores para clientes
+    const pm1 = aggregateBySellerClient(prev1DocsFat.data ?? [], prev1OsBase.data ?? []);
+    const pm2 = aggregateBySellerClient(prev2DocsFat.data ?? [], prev2OsBase.data ?? []);
+    const pm3 = aggregateBySellerClient(prev3DocsFat.data ?? [], prev3OsBase.data ?? []);
+    const allCids = new Set([...pm1.keys(), ...pm2.keys(), ...pm3.keys()]);
+    const prev = new Map<string, { id: string; nome: string; faturamento: number }>();
+    allCids.forEach(cid => {
+      const v1 = pm1.get(cid)?.faturamento ?? 0;
+      const v2 = pm2.get(cid)?.faturamento ?? 0;
+      const v3 = pm3.get(cid)?.faturamento ?? 0;
+      const nome = pm1.get(cid)?.nome ?? pm2.get(cid)?.nome ?? pm3.get(cid)?.nome ?? cid;
+      prev.set(cid, { id: cid, nome, faturamento: (v1 + v2 + v3) / 3 });
+    });
 
     const maiores = Array.from(cur.values()).sort((a, b) => b.faturamento - a.faturamento).slice(0, 10);
     const crescimento = Array.from(cur.values())
@@ -273,7 +310,19 @@ export function ComercialVendedoresTab({ filters }: Props) {
 
   const productLists = useMemo(() => {
     const cur = aggregateProducts(itens.data ?? [], osPecas.data ?? []);
-    const prev = aggregateProducts(prevItens.data ?? [], prevOsPecas.data ?? []);
+    // Média dos 3 meses anteriores para produtos
+    const pp1 = aggregateProducts(prev1Itens.data ?? [], prev1OsPecas.data ?? []);
+    const pp2 = aggregateProducts(prev2Itens.data ?? [], prev2OsPecas.data ?? []);
+    const pp3 = aggregateProducts(prev3Itens.data ?? [], prev3OsPecas.data ?? []);
+    const allPids = new Set([...pp1.keys(), ...pp2.keys(), ...pp3.keys()]);
+    const prev = new Map<string, { id: string; nome: string; grupo: string; faturamento: number }>();
+    allPids.forEach(pid => {
+      const v1 = pp1.get(pid)?.faturamento ?? 0;
+      const v2 = pp2.get(pid)?.faturamento ?? 0;
+      const v3 = pp3.get(pid)?.faturamento ?? 0;
+      const src = pp1.get(pid) ?? pp2.get(pid) ?? pp3.get(pid)!;
+      prev.set(pid, { ...src, faturamento: (v1 + v2 + v3) / 3 });
+    });
     const servicos = (osServicos.data ?? [])
       .filter((row) => selectedSeller === "TODOS" || sellerId(row) === selectedSeller)
       .reduce((map, row) => {
@@ -332,7 +381,7 @@ export function ComercialVendedoresTab({ filters }: Props) {
 
   const hasError = docsFat.error || osBase.error || dimVendedor.error || dimCliente.error;
   const isLoading = docsFat.isLoading || osBase.isLoading || dimVendedor.isLoading || dimCliente.isLoading;
-  const allLoading = isLoading || prevDocsFat.isLoading || prevOsBase.isLoading || itens.isLoading || osPecas.isLoading;
+  const allLoading = isLoading || prev1DocsFat.isLoading || prev2DocsFat.isLoading || prev3DocsFat.isLoading || itens.isLoading || osPecas.isLoading;
 
   if (hasError) {
     return <div className="dashboard-section"><ErrorAlert message="Erro ao carregar vendedores" details={(docsFat.error as Error)?.message || (osBase.error as Error)?.message || (dimVendedor.error as Error)?.message || (dimCliente.error as Error)?.message || ""} /></div>;
@@ -401,7 +450,7 @@ export function ComercialVendedoresTab({ filters }: Props) {
                   <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `${(Number(v) / 1000).toFixed(0)}k`} />
                   <Tooltip formatter={(v: number) => formatCurrency(v)} />
                   <Legend />
-                  <Line type="monotone" dataKey="anterior" stroke="hsl(var(--muted-foreground))" strokeWidth={2} name="Mês anterior" />
+                  <Line type="monotone" dataKey="anterior" stroke="hsl(var(--muted-foreground))" strokeWidth={2} name="Média 3 meses" />
                   <Line type="monotone" dataKey="atual" stroke="hsl(var(--primary))" strokeWidth={2} name="Atual" />
                 </LineChart>
               </ResponsiveContainer>
@@ -451,14 +500,14 @@ export function ComercialVendedoresTab({ filters }: Props) {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <SimpleTable title="Maiores clientes" rows={clientLists.maiores} valueLabel="Faturamento" />
-        <SimpleTable title="Clientes crescendo" rows={clientLists.crescimento} valueLabel="Variação" mode="variation" positive />
-        <SimpleTable title="Clientes caindo" rows={clientLists.queda} valueLabel="Queda" mode="variation" />
+        <SimpleTable title="Clientes crescendo (vs média 3m)" rows={clientLists.crescimento} valueLabel="Variação" mode="variation" positive />
+        <SimpleTable title="Clientes caindo (vs média 3m)" rows={clientLists.queda} valueLabel="Queda" mode="variation" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <SimpleTable title="Produtos e serviços mais vendidos" rows={productLists.maisVendidos} valueLabel="Faturamento" showGroup />
-        <SimpleTable title="Produtos crescendo" rows={productLists.crescimento} valueLabel="Variação" mode="variation" positive showGroup />
-        <SimpleTable title="Produtos caindo" rows={productLists.queda} valueLabel="Queda" mode="variation" showGroup />
+        <SimpleTable title="Produtos crescendo (vs média 3m)" rows={productLists.crescimento} valueLabel="Variação" mode="variation" positive showGroup />
+        <SimpleTable title="Produtos caindo (vs média 3m)" rows={productLists.queda} valueLabel="Queda" mode="variation" showGroup />
       </div>
 
       {selected && (
