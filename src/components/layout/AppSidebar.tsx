@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Users, Wrench, ParkingCircle, Scissors, Boxes, Settings2 } from "lucide-react";
+import { LayoutDashboard, Users, Wrench, ParkingCircle, Scissors, Boxes, Settings2, X } from "lucide-react";
 
 const groups = [
   {
@@ -20,23 +20,38 @@ const groups = [
   },
 ];
 
-export function AppSidebar() {
+interface Props {
+  onClose?: () => void;
+}
+
+export function AppSidebar({ onClose }: Props) {
   return (
     <aside
-      className="hidden lg:flex flex-col fixed left-0 top-0 bottom-0 w-[240px] z-40"
+      className="flex flex-col w-[240px] h-full"
       style={{ background: "hsl(var(--sidebar-background))" }}
     >
-      <div className="px-5 py-5 flex items-center gap-3 border-b" style={{ borderColor: "hsl(var(--sidebar-border))" }}>
-        <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: "hsl(var(--blue-light))" }}>
-          <Boxes className="h-5 w-5 text-white" strokeWidth={2.5} />
-        </div>
-        <div className="min-w-0">
-          <div className="text-white font-bold tracking-tight text-[15px] leading-tight">BONONI</div>
-          <div className="text-[9px] font-semibold uppercase tracking-[0.16em]" style={{ color: "rgba(255,255,255,0.5)" }}>
-            Dashboard Loja
+      {/* Brand */}
+      <div className="px-5 py-5 flex items-center justify-between border-b" style={{ borderColor: "hsl(var(--sidebar-border))" }}>
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: "hsl(var(--blue-light))" }}>
+            <Boxes className="h-5 w-5 text-white" strokeWidth={2.5} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-white font-bold tracking-tight text-[15px] leading-tight">BONONI</div>
+            <div className="text-[9px] font-semibold uppercase tracking-[0.16em]" style={{ color: "rgba(255,255,255,0.5)" }}>
+              Dashboard Loja
+            </div>
           </div>
         </div>
+        {/* Botão fechar no mobile */}
+        {onClose && (
+          <button onClick={onClose} className="lg:hidden text-white/60 hover:text-white p-1">
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
+
+      {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2.5">
         {groups.map((g) => (
           <div key={g.label} className="mb-2">
@@ -48,6 +63,7 @@ export function AppSidebar() {
                   key={item.to}
                   to={item.to}
                   end={item.end}
+                  onClick={onClose}
                   className={({ isActive }) => `b-nav-item ${isActive ? "active" : ""}`}
                 >
                   <Icon className="h-4 w-4" />
@@ -58,6 +74,7 @@ export function AppSidebar() {
           </div>
         ))}
       </nav>
+
       <div className="px-4 py-3 border-t text-[10px]" style={{ borderColor: "hsl(var(--sidebar-border))", color: "rgba(255,255,255,0.4)" }}>
         Bononi Acessórios · Loja v1.0
       </div>
