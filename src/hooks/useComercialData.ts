@@ -53,7 +53,7 @@ async function fetchView(
   limit = 5000,
   options?: FetchViewOptions
 ): Promise<Record<string, unknown>[]> {
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  const projectId = "vishxwdxqiygbxmtpfoy";
 
   const params = new URLSearchParams({
     view,
@@ -98,7 +98,7 @@ async function fetchView(
 
   const response = await fetch(url, {
     headers: {
-      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZpc2h4d2R4cWl5Z2J4bXRwZm95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0Njg2MjIsImV4cCI6MjA4ODA0NDYyMn0.J647m3ieDHahNQYBWMRESl0aPFXsT_zt_7ZcDvyB-SA",
     },
   });
 
