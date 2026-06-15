@@ -59,6 +59,13 @@ export function GerencialTab({ filters }: Props) {
   });
   const osFaturadasCount = osFaturadasIds.size;
 
+  // ── M.O. Produzida (pátio + tapeçaria) ──
+  const tapProdMO   = useViewData("vw_tap_prod_v3", filters, 5000, { skipTipoSaida: true });
+  const patioFatMO  = useViewData("vw_patio_fat_col_v2", filters, 5000);
+  const moProduzida =
+    (tapProdMO.data ?? []).reduce((s, r) => s + (Number(r.produto_rateado) || 0) + (Number(r.servico_rateado) || 0), 0) +
+    (patioFatMO.data ?? []).reduce((s, r) => s + (Number(r.fat_rateado) || 0), 0);
+
   // Fat. Serviços / Peças (totalizador oficial vw_os_res_fat)
   const osResData = osRes.data ?? [];
   const faturamentoServicos = osResData.reduce((s, r) => s + (Number(r.fat_servicos) || 0), 0);
