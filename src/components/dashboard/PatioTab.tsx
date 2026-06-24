@@ -115,12 +115,21 @@ export function PatioTab({ filters }: Props) {
   const valorProduzido = produzidoData.reduce((s, r) => s + (Number(r.valor_produzido) || 0), 0);
   const fatRateado     = fatData.reduce((s, r) => s + (Number(r.fat_rateado) || 0), 0);
 
-  const dailyChart = diarioData
-    .map(r => ({
-      dia: String(r.data_apontamento || "").slice(5).replace("-", "/"),
-      rawDate: String(r.data_apontamento || ""),
-      trabalhadas: +(Number(r.horas_trabalhadas) || 0).toFixed(1),
-      disponiveis: +(Number(r.horas_disponiveis) || 0).toFixed(1),
+  // Agrupa por dia (view tem múltiplas linhas por dia/empresa)
+  const dailyMap: Record<string, { trab: number; disp: number }> = {};
+  diarioData.forEach(r => {
+    const d = String(r.data_apontamento || "").slice(0, 10);
+    if (!d) return;
+    if (!dailyMap[d]) dailyMap[d] = { trab: 0, disp: 0 };
+    dailyMap[d].trab += Number(r.horas_trabalhadas) || 0;
+    dailyMap[d].disp += Number(r.horas_disponiveis) || 0;
+  });
+  const dailyChart = Object.entries(dailyMap)
+    .map(([rawDate, v]) => ({
+      dia: rawDate.slice(5).replace("-", "/"),
+      rawDate,
+      trabalhadas: +Math.min(v.trab, v.disp).toFixed(1),
+      disponiveis: +v.disp.toFixed(1),
     }))
     .sort((a, b) => a.rawDate.localeCompare(b.rawDate));
 
@@ -376,3 +385,4 @@ export function PatioTab({ filters }: Props) {
     </div>
   );
 }
+
