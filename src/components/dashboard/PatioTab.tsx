@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Clock, Percent, DollarSign, TrendingUp } from "lucide-react";
+import { Clock, Percent, DollarSign, TrendingUp, ChevronDown, ChevronRight } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
@@ -21,14 +21,25 @@ function prodColor(pct: number) {
   if (pct >= 60) return "hsl(var(--warning))";
   return "hsl(var(--destructive))";
 }
-
 function prodBg(pct: number) {
   if (pct >= 80) return "bg-green-500";
   if (pct >= 60) return "bg-yellow-500";
   return "bg-red-500";
 }
 
-// Busca colaboradores configurados como PATIO
+// Grava log de erro no Supabase
+async function logErro(view_nome: string, mensagem: string, detalhe?: string) {
+  try {
+    await supabase.from("loja_frontend_logs").insert({
+      nivel: "error",
+      view_nome,
+      mensagem,
+      detalhe: detalhe ?? null,
+      user_agent: navigator?.userAgent?.slice(0, 200) ?? null,
+    });
+  } catch (_) { /* silencioso */ }
+}
+
 function usePatioColabs() {
   return useQuery({
     queryKey: ["config_patio"],
@@ -39,28 +50,42 @@ function usePatioColabs() {
         .eq("setor", "PATIO")
         .eq("ativo", true)
         .range(0, 9999);
-      if (error) throw error;
+      if (error) {
+        logErro("loja_config_colaborador", "Erro ao buscar colaboradores pátio", error.message);
+        throw error;
+      }
       return new Set((data ?? []).map(r => r.id_colaborador));
     },
     staleTime: 60_000,
   });
 }
 
+// Calcula último dia do mês corretamente
+function lastDayOfMonth(date: Date): string {
+  const y = date.getFullYear();
+  const m = date.getMonth() + 1;
+  const last = new Date(y, m, 0).getDate();
+  return `${y}-${String(m).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+}
+
 export function PatioTab({ filters }: Props) {
-  const [fatMode] = useState<"faturado" | "produzido">("faturado");
+  const [expandedColabs, setExpandedColabs] = useState<Set<string>>(new Set());
 
   const patioColabs = usePatioColabs();
   const patioColabIds = patioColabs.data ?? new Set();
 
   const produtividade = useViewData("vw_patio_produtividade_v2", filters);
-  // OP dos colaboradores do pátio (quem fez peça tapeçaria mas é do setor pátio)
-  const patioOp = useViewData("vw_tap_prod_v3", filters, 5000, { skipTipoSaida: true });
-  const fatCol       = useViewData("vw_patio_fat_col_v2", filters);
-  const produzido    = useViewData("vw_patio_produzido_v2", filters);
-  const diario       = useViewData("vw_patio_diario_v2", filters);
-  const servicosFat  = useViewData("vw_os_servicos_faturados", filters);
+  const patioOp       = useViewData("vw_tap_prod_v3", filters, 5000, { skipTipoSaida: true });
+  const fatCol        = useViewData("vw_patio_fat_col_v2", filters);
+  const produzido     = useViewData("vw_patio_produzido_v2", filters);
+  const diario        = useViewData("vw_patio_diario_v2", filters);
+  const servicosFat   = useViewData("vw_os_servicos_faturados", filters);
 
-  // Filtra pelo setor PATIO da config
+  // Loga erros de fetch automaticamente
+  if (produtividade.error) logErro("vw_patio_produtividade_v2", "Erro fetch", (produtividade.error as Error).message);
+  if (fatCol.error)        logErro("vw_patio_fat_col_v2", "Erro fetch", (fatCol.error as Error).message);
+  if (patioOp.error)       logErro("vw_tap_prod_v3", "Erro fetch (patio OP)", (patioOp.error as Error).message);
+
   const patioOpData = (patioOp.data ?? []).filter(r =>
     (patioColabIds.size === 0 || patioColabIds.has(Number(r.id_colaborador))) &&
     String(r.tipo_lancamento || "").toUpperCase() === "PRODUTO"
@@ -69,32 +94,20 @@ export function PatioTab({ filters }: Props) {
     (Number(r.horas_trabalhadas) || 0) > 0 &&
     (patioColabIds.size === 0 || patioColabIds.has(Number(r.id_colaborador)))
   );
-  const fatData = (fatCol.data ?? []).filter(r =>
-    patioColabIds.size === 0 || patioColabIds.has(Number(r.id_colaborador))
-  );
+  const fatData       = (fatCol.data ?? []).filter(r => patioColabIds.size === 0 || patioColabIds.has(Number(r.id_colaborador)));
   const produzidoData = produzido.data ?? [];
   const diarioData    = diario.data ?? [];
 
-  // ─── DEDUPLICAÇÃO: vw_patio_produtividade_v2 tem 1 linha por colaborador/dia/OS
-  // Precisamos de 1 linha por colaborador/dia para não multiplicar horas_disponiveis (8.8 fixo)
+  // ── Deduplica: 1 linha por colaborador/dia (8.8h disponível por dia, não por OS)
   const dedupMap: Record<string, { nome: string; id: number; trab: number; disp: number }> = {};
   prodDataRaw.forEach(r => {
     const key = `${r.id_colaborador}__${String(r.data_apontamento).slice(0, 10)}`;
     if (!dedupMap[key]) {
-      dedupMap[key] = {
-        nome: String(r.nome_colaborador || "-"),
-        id:   Number(r.id_colaborador),
-        trab: 0,
-        disp: 8.8, // fixo por dia por colaborador
-      };
+      dedupMap[key] = { nome: String(r.nome_colaborador || "-"), id: Number(r.id_colaborador), trab: 0, disp: 8.8 };
     }
     dedupMap[key].trab += Number(r.horas_trabalhadas) || 0;
   });
-  // Aplica teto de 8.8h por dia
-  const prodData = Object.values(dedupMap).map(v => ({
-    ...v,
-    trab: Math.min(v.trab, 8.8),
-  }));
+  const prodData = Object.values(dedupMap).map(v => ({ ...v, trab: Math.min(v.trab, 8.8) }));
 
   const horasDisp      = prodData.reduce((s, r) => s + r.disp, 0);
   const horasTrab      = prodData.reduce((s, r) => s + r.trab, 0);
@@ -111,21 +124,41 @@ export function PatioTab({ filters }: Props) {
     }))
     .sort((a, b) => a.rawDate.localeCompare(b.rawDate));
 
-  // Ranking por colaborador — já deduplicado (prodData é 1 linha por colab/dia)
-  const colabProdMap: Record<string, { trab: number; disp: number; nome: string }> = {};
+  // ── Ranking colaboradores: agrega por nome, com detalhe por dia
+  type DiaDetalhe = { dia: string; rawDate: string; trab: number; disp: number; pct: number };
+  type ColabEntry = { nome: string; trab: number; disp: number; pct: number; dias: DiaDetalhe[] };
+
+  const colabMap: Record<string, { trab: number; disp: number; nome: string; dias: Record<string, { trab: number; disp: number }> }> = {};
   prodData.forEach(r => {
-    const nome = r.nome;
-    if (!colabProdMap[nome]) colabProdMap[nome] = { trab: 0, disp: 0, nome };
-    colabProdMap[nome].trab += r.trab;
-    colabProdMap[nome].disp += r.disp;
+    const key = `${r.id}`;
+    if (!colabMap[key]) colabMap[key] = { nome: r.nome, trab: 0, disp: 0, dias: {} };
+    // data_apontamento está na chave do dedupMap — precisa recuperar
+  });
+  // Reconstrói do dedupMap original para ter data por linha
+  Object.entries(dedupMap).forEach(([key, v]) => {
+    const [idStr, data] = key.split("__");
+    const colabKey = idStr;
+    if (!colabMap[colabKey]) colabMap[colabKey] = { nome: v.nome, trab: 0, disp: 0, dias: {} };
+    colabMap[colabKey].trab += v.trab;
+    colabMap[colabKey].disp += v.disp;
+    colabMap[colabKey].dias[data] = { trab: v.trab, disp: v.disp };
   });
 
-  const prodRanking = Object.values(colabProdMap)
+  const prodRanking: ColabEntry[] = Object.values(colabMap)
     .map(v => ({
       nome: v.nome,
       trab: +v.trab.toFixed(1),
       disp: +v.disp.toFixed(1),
       pct:  v.disp > 0 ? +((v.trab / v.disp) * 100).toFixed(1) : 0,
+      dias: Object.entries(v.dias)
+        .map(([rawDate, d]) => ({
+          dia: rawDate.slice(5).replace("-", "/"),
+          rawDate,
+          trab: +d.trab.toFixed(1),
+          disp: d.disp,
+          pct:  d.disp > 0 ? +((d.trab / d.disp) * 100).toFixed(1) : 0,
+        }))
+        .sort((a, b) => a.rawDate.localeCompare(b.rawDate)),
     }))
     .sort((a, b) => b.pct - a.pct);
 
@@ -133,32 +166,36 @@ export function PatioTab({ filters }: Props) {
     prodRanking as unknown as Record<string, unknown>[], "pct", "desc"
   );
 
-  // OP por colaborador do pátio
+  function toggleExpand(nome: string) {
+    setExpandedColabs(prev => {
+      const next = new Set(prev);
+      next.has(nome) ? next.delete(nome) : next.add(nome);
+      return next;
+    });
+  }
+
+  // Faturamento por colaborador
   const opColabMap: Record<string, number> = {};
   patioOpData.forEach(r => {
     const nome = String(r.nome_colaborador || "-");
     opColabMap[nome] = (opColabMap[nome] || 0) + (Number(r.produto_rateado) || 0);
   });
-
-  const colabFatMap: Record<string, { nome: string; fat: number; op: number; total: number; horas: number }> = {};
+  const colabFatMap: Record<string, { nome: string; fat: number; horas: number }> = {};
   fatData.forEach(r => {
     const nome = String(r.nome_colaborador || "-");
-    if (!colabFatMap[nome]) colabFatMap[nome] = { nome, fat: 0, op: 0, total: 0, horas: 0 };
+    if (!colabFatMap[nome]) colabFatMap[nome] = { nome, fat: 0, horas: 0 };
     colabFatMap[nome].fat   += Number(r.fat_rateado) || 0;
     colabFatMap[nome].horas += Number(r.horas_colab) || 0;
   });
-
   const fatRanking = Object.values(colabFatMap)
     .map(v => {
       const op    = +(opColabMap[v.nome] || 0).toFixed(2);
       const fat   = +v.fat.toFixed(2);
-      const total = +(fat + op).toFixed(2);
-      return { nome: v.nome, fat, op, total, horas: +v.horas.toFixed(1) };
+      return { nome: v.nome, fat, op, total: +(fat + op).toFixed(2), horas: +v.horas.toFixed(1) };
     })
     .filter(r => r.fat > 0 || r.op > 0)
     .sort((a, b) => b.total - a.total)
     .slice(0, 30);
-
   const { sorted: sortedFat, sort: fatSort, toggle: toggleFat } = useSortable(
     fatRanking as unknown as Record<string, unknown>[], "fat", "desc"
   );
@@ -198,25 +235,26 @@ export function PatioTab({ filters }: Props) {
       {diario.isLoading ? <ChartSkeleton /> : (
         <div className="chart-container">
           <h3 className="text-sm font-semibold font-display mb-4 text-foreground">Evolução diária do Pátio</h3>
-          {dailyChart.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">Sem dados</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={dailyChart}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="dia" tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" angle={-45} textAnchor="end" height={50} />
-                <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                <Tooltip formatter={(v: number) => `${v}h`} />
-                <Legend />
-                <Line type="monotone" dataKey="disponiveis" stroke="hsl(var(--muted-foreground))" strokeDasharray="5 5" name="Disponíveis" dot={false} />
-                <Line type="monotone" dataKey="trabalhadas" stroke="hsl(var(--primary))" name="Trabalhadas" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
+          {dailyChart.length === 0
+            ? <p className="text-sm text-muted-foreground py-8 text-center">Sem dados</p>
+            : (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={dailyChart}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="dia" tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" angle={-45} textAnchor="end" height={50} />
+                  <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                  <Tooltip formatter={(v: number) => `${v}h`} />
+                  <Legend />
+                  <Line type="monotone" dataKey="disponiveis" stroke="hsl(var(--muted-foreground))" strokeDasharray="5 5" name="Disponíveis" dot={false} />
+                  <Line type="monotone" dataKey="trabalhadas" stroke="hsl(var(--primary))" name="Trabalhadas" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Produtividade por colaborador — expansível por dia */}
         {produtividade.isLoading ? <TableSkeleton /> : (
           <div className="chart-container">
             <h3 className="text-sm font-semibold font-display mb-4 text-foreground">Produtividade por colaborador</h3>
@@ -224,6 +262,7 @@ export function PatioTab({ filters }: Props) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left">
+                    <th className="pb-2 w-6" />
                     <th className="pb-2 font-medium text-muted-foreground text-xs">#</th>
                     <SortableHeader label="Colaborador"   field="nome" sort={prodSort} onToggle={toggleProd} />
                     <SortableHeader label="Horas"         field="trab" sort={prodSort} onToggle={toggleProd} className="text-right" />
@@ -233,20 +272,47 @@ export function PatioTab({ filters }: Props) {
                 </thead>
                 <tbody>
                   {sortedProd.map((r, i) => {
-                    const pct = Number(r.pct);
+                    const pct      = Number(r.pct);
+                    const nome     = String(r.nome);
+                    const expanded = expandedColabs.has(nome);
+                    const dias     = (r as unknown as { dias: { dia: string; trab: number; disp: number; pct: number }[] }).dias ?? [];
                     return (
-                      <tr key={i} className="border-b border-border/50 hover:bg-muted/50">
-                        <td className="py-2 text-xs text-muted-foreground">{i + 1}</td>
-                        <td className="py-2 text-xs font-medium">{String(r.nome)}</td>
-                        <td className="py-2 text-xs text-right">{String(r.trab)}h</td>
-                        <td className="py-2 text-xs text-right">{String(r.disp)}h</td>
-                        <td className="py-2 text-xs text-right w-40">
-                          <div className="flex items-center gap-2 justify-end">
-                            <Progress value={Math.min(pct, 100)} className={`h-2 w-20 [&>div]:${prodBg(pct)}`} />
-                            <span style={{ color: prodColor(pct) }} className="font-semibold min-w-[40px] text-right">{formatPercent(pct)}</span>
-                          </div>
-                        </td>
-                      </tr>
+                      <>
+                        {/* Linha principal do colaborador */}
+                        <tr
+                          key={`colab-${i}`}
+                          className="border-b border-border/50 hover:bg-muted/50 cursor-pointer"
+                          onClick={() => toggleExpand(nome)}
+                        >
+                          <td className="py-2 pl-1 text-muted-foreground">
+                            {dias.length > 0
+                              ? (expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />)
+                              : <span className="w-3 inline-block" />}
+                          </td>
+                          <td className="py-2 text-xs text-muted-foreground">{i + 1}</td>
+                          <td className="py-2 text-xs font-medium">{nome}</td>
+                          <td className="py-2 text-xs text-right">{String(r.trab)}h</td>
+                          <td className="py-2 text-xs text-right">{String(r.disp)}h</td>
+                          <td className="py-2 text-xs text-right w-40">
+                            <div className="flex items-center gap-2 justify-end">
+                              <Progress value={Math.min(pct, 100)} className={`h-2 w-20 [&>div]:${prodBg(pct)}`} />
+                              <span style={{ color: prodColor(pct) }} className="font-semibold min-w-[40px] text-right">{formatPercent(pct)}</span>
+                            </div>
+                          </td>
+                        </tr>
+                        {/* Linhas de detalhe por dia */}
+                        {expanded && dias.map((d, j) => (
+                          <tr key={`dia-${i}-${j}`} className="bg-muted/30 border-b border-border/30">
+                            <td colSpan={2} />
+                            <td className="py-1 pl-4 text-xs text-muted-foreground">{d.dia}</td>
+                            <td className="py-1 text-xs text-right text-muted-foreground">{d.trab}h</td>
+                            <td className="py-1 text-xs text-right text-muted-foreground">{d.disp}h</td>
+                            <td className="py-1 text-xs text-right">
+                              <span style={{ color: prodColor(d.pct) }} className="font-medium">{formatPercent(d.pct)}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </>
                     );
                   })}
                 </tbody>
@@ -255,6 +321,7 @@ export function PatioTab({ filters }: Props) {
           </div>
         )}
 
+        {/* Faturamento por colaborador */}
         {fatCol.isLoading ? <TableSkeleton /> : (
           <div className="chart-container">
             <h3 className="text-sm font-semibold font-display mb-4 text-foreground">Faturamento por colaborador</h3>
@@ -291,19 +358,19 @@ export function PatioTab({ filters }: Props) {
       {servicosFat.isLoading ? <ChartSkeleton /> : (
         <div className="chart-container">
           <h3 className="text-sm font-semibold font-display mb-4 text-foreground">Faturamento por grupo de serviço</h3>
-          {grupoChart.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">Sem dados</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={grupoChart} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `${(Number(v) / 1000).toFixed(0)}k`} />
-                <YAxis dataKey="grupo" type="category" width={150} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                <Bar dataKey="valor" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+          {grupoChart.length === 0
+            ? <p className="text-sm text-muted-foreground py-8 text-center">Sem dados</p>
+            : (
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={grupoChart} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `${(Number(v) / 1000).toFixed(0)}k`} />
+                  <YAxis dataKey="grupo" type="category" width={150} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                  <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                  <Bar dataKey="valor" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
         </div>
       )}
     </div>
