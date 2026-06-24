@@ -52,7 +52,7 @@ export function TapecariaTab({ filters }: Props) {
 
   // ── Data sources — usa vw_tap_prod_v3 (sem filtro departamento, bug de duplicação corrigido) ──
   const tapProd = useViewData("vw_tap_prod_v3", filters, 5000, {
-    columns: "id_colaborador,nome_colaborador,produto_rateado,servico_rateado,tipo_lancamento,produto,grupo,subgrupo,nome_servico,grupo_serv,horas_colab,data_apontamento",
+    columns: "id_colaborador,nome_colaborador,produto_rateado,servico_rateado,tipo_lancamento,produto,grupo,subgrupo,nome_servico,grupo_serv,horas_colab,data_apontamento,id_servico_os",
   });
   const itensVendidos = useViewData("vw_comercial_itens_faturados", filters, 5000, { skipTipoSaida: true });
 
@@ -74,22 +74,42 @@ export function TapecariaTab({ filters }: Props) {
   const fatTotal = pecasOsFat + servicosOsFat + vendaDiretaTapFat;
 
   // ── Ranking por colaborador: OP + Serviço + Total ──
-  const fatColabMap: Record<string, { op: number; servico: number; horas: number }> = {};
+  // DEDUPLICAÇÃO: vw_tap_prod_v3 tem 1 linha por (id_servico_os, colaborador, tipo_lancamento)
+  // horas_colab já está correto por OS, mas pode aparecer múltiplas linhas por colab/OS (PRODUTO + SERVICO)
+  // Deduplica horas por (id_colaborador, id_servico_os) para não somar dobrado
+  const horasDedup: Record<string, number> = {};
   tapProdData.forEach(r => {
+    const key = `${r.id_colaborador}__${r.id_servico_os}`;
+    // Pega o maior valor de horas_colab para essa chave (deve ser igual em PRODUTO e SERVICO da mesma OS)
+    const h = Number(r.horas_colab) || 0;
+    if (!horasDedup[key] || h > horasDedup[key]) {
+      horasDedup[key] = h;
+    }
+  });
+
+  // Mapa de horas corretas por colaborador
+  const horasColabMap: Record<string, number> = {};
+  Object.entries(horasDedup).forEach(([key, h]) => {
+    const idColab = key.split("__")[0];
+    horasColabMap[idColab] = (horasColabMap[idColab] || 0) + h;
+  });
+
+  const fatColabMap: Record<string, { nome: string; id: string; op: number; servico: number }> = {};
+  tapProdData.forEach(r => {
+    const id = String(r.id_colaborador);
     const nome = String(r.nome_colaborador || "-");
-    if (!fatColabMap[nome]) fatColabMap[nome] = { op: 0, servico: 0, horas: 0 };
-    fatColabMap[nome].op      += Number(r.produto_rateado) || 0;
-    fatColabMap[nome].servico += Number(r.servico_rateado) || 0;
-    fatColabMap[nome].horas   += Number(r.horas_colab) || 0;
+    if (!fatColabMap[id]) fatColabMap[id] = { nome, id, op: 0, servico: 0 };
+    fatColabMap[id].op      += Number(r.produto_rateado) || 0;
+    fatColabMap[id].servico += Number(r.servico_rateado) || 0;
   });
 
   const colabRanking = Object.entries(fatColabMap)
-    .map(([nome, v]) => ({
-      nome,
+    .map(([id, v]) => ({
+      nome:    v.nome,
       op:      +v.op.toFixed(2),
       servico: +v.servico.toFixed(2),
       total:   +(v.op + v.servico).toFixed(2),
-      horas:   +v.horas.toFixed(1),
+      horas:   +(horasColabMap[id] || 0).toFixed(1),
     }))
     .filter(r => r.op > 0 || r.servico > 0)
     .sort((a, b) => b.total - a.total);
