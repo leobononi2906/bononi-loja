@@ -65,18 +65,39 @@ export function PatioTab({ filters }: Props) {
     (patioColabIds.size === 0 || patioColabIds.has(Number(r.id_colaborador))) &&
     String(r.tipo_lancamento || "").toUpperCase() === "PRODUTO"
   );
-  const prodData    = (produtividade.data ?? []).filter(r =>
+  const prodDataRaw = (produtividade.data ?? []).filter(r =>
     (Number(r.horas_trabalhadas) || 0) > 0 &&
     (patioColabIds.size === 0 || patioColabIds.has(Number(r.id_colaborador)))
   );
-  const fatData     = (fatCol.data ?? []).filter(r =>
+  const fatData = (fatCol.data ?? []).filter(r =>
     patioColabIds.size === 0 || patioColabIds.has(Number(r.id_colaborador))
   );
   const produzidoData = produzido.data ?? [];
   const diarioData    = diario.data ?? [];
 
-  const horasDisp      = prodData.reduce((s, r) => s + (Number(r.horas_disponiveis) || 0), 0);
-  const horasTrab      = prodData.reduce((s, r) => s + (Number(r.horas_trabalhadas) || 0), 0);
+  // ─── DEDUPLICAÇÃO: vw_patio_produtividade_v2 tem 1 linha por colaborador/dia/OS
+  // Precisamos de 1 linha por colaborador/dia para não multiplicar horas_disponiveis (8.8 fixo)
+  const dedupMap: Record<string, { nome: string; id: number; trab: number; disp: number }> = {};
+  prodDataRaw.forEach(r => {
+    const key = `${r.id_colaborador}__${String(r.data_apontamento).slice(0, 10)}`;
+    if (!dedupMap[key]) {
+      dedupMap[key] = {
+        nome: String(r.nome_colaborador || "-"),
+        id:   Number(r.id_colaborador),
+        trab: 0,
+        disp: 8.8, // fixo por dia por colaborador
+      };
+    }
+    dedupMap[key].trab += Number(r.horas_trabalhadas) || 0;
+  });
+  // Aplica teto de 8.8h por dia
+  const prodData = Object.values(dedupMap).map(v => ({
+    ...v,
+    trab: Math.min(v.trab, 8.8),
+  }));
+
+  const horasDisp      = prodData.reduce((s, r) => s + r.disp, 0);
+  const horasTrab      = prodData.reduce((s, r) => s + r.trab, 0);
   const prodGeral      = horasDisp > 0 ? (horasTrab / horasDisp) * 100 : 0;
   const valorProduzido = produzidoData.reduce((s, r) => s + (Number(r.valor_produzido) || 0), 0);
   const fatRateado     = fatData.reduce((s, r) => s + (Number(r.fat_rateado) || 0), 0);
@@ -90,12 +111,13 @@ export function PatioTab({ filters }: Props) {
     }))
     .sort((a, b) => a.rawDate.localeCompare(b.rawDate));
 
+  // Ranking por colaborador — já deduplicado (prodData é 1 linha por colab/dia)
   const colabProdMap: Record<string, { trab: number; disp: number; nome: string }> = {};
   prodData.forEach(r => {
-    const nome = String(r.nome_colaborador || "-");
+    const nome = r.nome;
     if (!colabProdMap[nome]) colabProdMap[nome] = { trab: 0, disp: 0, nome };
-    colabProdMap[nome].trab += Number(r.horas_trabalhadas) || 0;
-    colabProdMap[nome].disp += Number(r.horas_disponiveis) || 0;
+    colabProdMap[nome].trab += r.trab;
+    colabProdMap[nome].disp += r.disp;
   });
 
   const prodRanking = Object.values(colabProdMap)
