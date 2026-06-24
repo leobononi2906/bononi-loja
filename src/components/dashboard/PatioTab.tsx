@@ -99,15 +99,19 @@ export function PatioTab({ filters }: Props) {
   const diarioData    = diario.data ?? [];
 
   // ── Deduplica: 1 linha por colaborador/dia (8.8h disponível por dia, não por OS)
-  const dedupMap: Record<string, { nome: string; id: number; trab: number; disp: number }> = {};
+  const dedupMap: Record<string, { nome: string; id: number; trab: number; disp: number; extrapolou: boolean }> = {};
   prodDataRaw.forEach(r => {
     const key = `${r.id_colaborador}__${String(r.data_apontamento).slice(0, 10)}`;
     if (!dedupMap[key]) {
-      dedupMap[key] = { nome: String(r.nome_colaborador || "-"), id: Number(r.id_colaborador), trab: 0, disp: 8.8 };
+      dedupMap[key] = { nome: String(r.nome_colaborador || "-"), id: Number(r.id_colaborador), trab: 0, disp: 8.8, extrapolou: false };
     }
     dedupMap[key].trab += Number(r.horas_trabalhadas) || 0;
   });
-  const prodData = Object.values(dedupMap).map(v => ({ ...v, trab: Math.min(v.trab, 8.8) }));
+  const prodData = Object.values(dedupMap).map(v => ({
+    ...v,
+    extrapolou: v.trab > 8.8,
+    trab: Math.min(v.trab, 8.8),
+  }));
 
   const horasDisp      = prodData.reduce((s, r) => s + r.disp, 0);
   const horasTrab      = prodData.reduce((s, r) => s + r.trab, 0);
@@ -134,10 +138,10 @@ export function PatioTab({ filters }: Props) {
     .sort((a, b) => a.rawDate.localeCompare(b.rawDate));
 
   // ── Ranking colaboradores: agrega por nome, com detalhe por dia
-  type DiaDetalhe = { dia: string; rawDate: string; trab: number; disp: number; pct: number };
+  type DiaDetalhe = { dia: string; rawDate: string; trab: number; disp: number; pct: number; extrapolou: boolean; horasBrutas: number };
   type ColabEntry = { nome: string; trab: number; disp: number; pct: number; dias: DiaDetalhe[] };
 
-  const colabMap: Record<string, { trab: number; disp: number; nome: string; dias: Record<string, { trab: number; disp: number }> }> = {};
+  const colabMap: Record<string, { trab: number; disp: number; nome: string; dias: Record<string, { trab: number; disp: number; extrapolou: boolean; horasBrutas: number }> }> = {};
   prodData.forEach(r => {
     const key = `${r.id}`;
     if (!colabMap[key]) colabMap[key] = { nome: r.nome, trab: 0, disp: 0, dias: {} };
@@ -148,9 +152,10 @@ export function PatioTab({ filters }: Props) {
     const [idStr, data] = key.split("__");
     const colabKey = idStr;
     if (!colabMap[colabKey]) colabMap[colabKey] = { nome: v.nome, trab: 0, disp: 0, dias: {} };
-    colabMap[colabKey].trab += v.trab;
+    const trabLimitado = Math.min(v.trab, 8.8);
+    colabMap[colabKey].trab += trabLimitado;
     colabMap[colabKey].disp += v.disp;
-    colabMap[colabKey].dias[data] = { trab: v.trab, disp: v.disp };
+    colabMap[colabKey].dias[data] = { trab: trabLimitado, disp: v.disp, extrapolou: v.trab > 8.8, horasBrutas: +v.trab.toFixed(1) };
   });
 
   const prodRanking: ColabEntry[] = Object.values(colabMap)
@@ -166,6 +171,8 @@ export function PatioTab({ filters }: Props) {
           trab: +d.trab.toFixed(1),
           disp: d.disp,
           pct:  d.disp > 0 ? +((d.trab / d.disp) * 100).toFixed(1) : 0,
+          extrapolou: d.extrapolou,
+          horasBrutas: d.horasBrutas,
         }))
         .sort((a, b) => a.rawDate.localeCompare(b.rawDate)),
     }))
@@ -313,8 +320,19 @@ export function PatioTab({ filters }: Props) {
                         {expanded && dias.map((d, j) => (
                           <tr key={`dia-${i}-${j}`} className="bg-muted/30 border-b border-border/30">
                             <td colSpan={2} />
-                            <td className="py-1 pl-4 text-xs text-muted-foreground">{d.dia}</td>
-                            <td className="py-1 text-xs text-right text-muted-foreground">{d.trab}h</td>
+                            <td className="py-1 pl-4 text-xs text-muted-foreground">
+                              {d.dia}
+                              {d.extrapolou && (
+                                <span
+                                  title={`Apontamento excede jornada: ${d.horasBrutas}h registradas (limitado a 8.8h)`}
+                                  className="ml-1 text-amber-500 cursor-help"
+                                >⚠️</span>
+                              )}
+                            </td>
+                            <td className="py-1 text-xs text-right text-muted-foreground">
+                              {d.trab}h
+                              {d.extrapolou && <span className="ml-1 text-amber-500 text-[10px]">({d.horasBrutas}h)</span>}
+                            </td>
                             <td className="py-1 text-xs text-right text-muted-foreground">{d.disp}h</td>
                             <td className="py-1 text-xs text-right">
                               <span style={{ color: prodColor(d.pct) }} className="font-medium">{formatPercent(d.pct)}</span>
@@ -385,4 +403,5 @@ export function PatioTab({ filters }: Props) {
     </div>
   );
 }
+
 
