@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { subMonths, getDaysInMonth, isSameMonth } from "date-fns";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { DollarSign, FileText, Package, Users, Wrench, TrendingUp, TrendingDown } from "lucide-react";
@@ -8,7 +8,7 @@ import { KPISkeleton, TableSkeleton, ChartSkeleton } from "./LoadingSkeleton";
 import { useViewData } from "@/hooks/useComercialData";
 import { formatCurrency, formatCurrencyInt, formatPercent, type DashboardFilters } from "@/data/mockData";
 import { buildVendedorInfo, resolveVendedorNome } from "@/lib/dim-vendedor";
-import { buildClienteNameMap, resolveClienteNome } from "@/lib/dim-cliente";
+import { buildClienteNameMap, resolveClienteNome, enrichClienteNames } from "@/lib/dim-cliente";
 
 interface Props {
   filters: DashboardFilters;
@@ -69,11 +69,9 @@ export function ComercialVendedoresTab({ filters }: Props) {
   const osBase = useViewData("vw_os_base_fat_corrigido", filters, 5000, { dateCol: "data_faturamento_corrigida" });
   const osEntrada = useViewData("vw_os_base", filters, 5000, { dateCol: "data_entrada" });
   const dimVendedor = useViewData("vw_loja_vendedores", filters, 5000, { skipDate: true, skipTipoSaida: true });
-  const dimCliente = useViewData("vw_dim_cliente", filters, 5000, {
-    skipDate: true,
-    skipTipoSaida: true,
-    columns: "id_cliente,nome_cliente",
-  });
+  // vw_dim_cliente tem 69k registros — não faz fetch geral.
+  // Nomes são resolvidos via enrich lazy (enrichClienteNames) pelos ids do período.
+  const dimCliente = { data: [] as Record<string, unknown>[], isLoading: false, error: null };
 
   const itens = useViewData("vw_comercial_itens_faturados", filters, 5000);
   const osPecas = useViewData("vw_os_pecas_faturadas", filters, 5000);
@@ -104,10 +102,21 @@ export function ComercialVendedoresTab({ filters }: Props) {
   const prevOsPecas = prev1OsPecas;
 
   const vendedorInfo = useMemo(() => buildVendedorInfo(dimVendedor.data), [dimVendedor.data]);
-  const clienteNameMap = useMemo(
-    () => buildClienteNameMap(docsFat.data, osBase.data, prevDocsFat.data, prevOsBase.data, dimCliente.data),
-    [dimCliente.data, docsFat.data, osBase.data, prevDocsFat.data, prevOsBase.data],
+  // Mapa base com nomes que vêm inline nos docs
+  const baseClienteMap = useMemo(
+    () => buildClienteNameMap(docsFat.data, osBase.data, prev1DocsFat.data, prev1OsBase.data),
+    [docsFat.data, osBase.data, prev1DocsFat.data, prev1OsBase.data],
   );
+
+  // Mapa enriquecido: busca na vw_dim_cliente só os ids sem nome
+  const [clienteNameMap, setClienteNameMap] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    enrichClienteNames(baseClienteMap, [docsFat.data, osBase.data, prev1DocsFat.data, prev1OsBase.data, prev2DocsFat.data, prev3DocsFat.data]).then(enriched => {
+      if (!cancelled) setClienteNameMap(enriched);
+    });
+    return () => { cancelled = true; };
+  }, [baseClienteMap]);
 
   function aggregateSellers(docsRows: Row[], osRows: Row[], osEntradaRows: Row[]) {
     const map = new Map<string, SellerAgg>();
@@ -589,3 +598,4 @@ function SimpleTable({
     </div>
   );
 }
+
