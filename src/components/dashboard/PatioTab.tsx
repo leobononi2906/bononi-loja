@@ -75,7 +75,7 @@ export function PatioTab({ filters }: Props) {
   const patioColabIds = patioColabs.data ?? new Set();
 
   const produtividade = useViewData("vw_patio_produtividade_v2", filters);
-  const patioOp       = useViewData("vw_tap_prod_v3", filters, 5000, { skipTipoSaida: true });
+  const patioOp       = useViewData("vw_tap_prod_v3", filters, 5000, { skipTipoSaida: true, columns: "id_colaborador,nome_colaborador,tipo_lancamento,produto,grupo,subgrupo,nome_servico,grupo_serv,horas_colab,data_apontamento,produto_rateado,servico_rateado" });
   const fatCol        = useViewData("vw_patio_fat_col_v2", filters);
   const produzido     = useViewData("vw_patio_produzido_v2", filters);
   const diario        = useViewData("vw_patio_diario_v2", filters);
@@ -331,7 +331,7 @@ export function PatioTab({ filters }: Props) {
                             </td>
                             <td className="py-1 text-xs text-right text-muted-foreground">
                               {d.trab}h
-                              {d.extrapolou && <span className="ml-1 text-amber-500 text-[10px]">({d.horasBrutas}h)</span>}
+                              {d.extrapolou && <span className="ml-1 text-amber-500 text-[10px]">({d.horasBrutas}h apontadas)</span>}
                             </td>
                             <td className="py-1 text-xs text-right text-muted-foreground">{d.disp}h</td>
                             <td className="py-1 text-xs text-right">
@@ -403,5 +403,6 @@ export function PatioTab({ filters }: Props) {
     </div>
   );
 }
+
 
 
