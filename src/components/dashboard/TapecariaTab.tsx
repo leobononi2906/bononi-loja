@@ -52,7 +52,7 @@ export function TapecariaTab({ filters }: Props) {
 
   // ── Data sources — usa vw_tap_prod_v3 (sem filtro departamento, bug de duplicação corrigido) ──
   const tapProd = useViewData("vw_tap_prod_v3", filters, 5000, {
-    columns: "id_colaborador,nome_colaborador,produto_rateado,servico_rateado,tipo_lancamento,produto,grupo,subgrupo,nome_servico,grupo_serv,horas_colab,data_apontamento,id_servico_os",
+    columns: "id_colaborador,nome_colaborador,produto_rateado,servico_rateado,tipo_lancamento,produto,grupo,subgrupo,nome_servico,grupo_serv,horas_colab,data_apontamento,id_produto",
   });
   const itensVendidos = useViewData("vw_comercial_itens_faturados", filters, 5000, { skipTipoSaida: true });
 
@@ -79,7 +79,7 @@ export function TapecariaTab({ filters }: Props) {
   // Deduplica horas por (id_colaborador, id_servico_os) para não somar dobrado
   const horasDedup: Record<string, number> = {};
   tapProdData.forEach(r => {
-    const key = `${r.id_colaborador}__${r.id_servico_os}`;
+    const key = `${r.id_colaborador}__${r.id_produto}`;
     // Pega o maior valor de horas_colab para essa chave (deve ser igual em PRODUTO e SERVICO da mesma OS)
     const h = Number(r.horas_colab) || 0;
     if (!horasDedup[key] || h > horasDedup[key]) {
@@ -302,3 +302,4 @@ export function TapecariaTab({ filters }: Props) {
     </div>
   );
 }
+
