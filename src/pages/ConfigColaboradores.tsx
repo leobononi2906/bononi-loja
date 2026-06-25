@@ -34,7 +34,9 @@ async function fetchViaEdge(view: string, startDate: string, endDate: string, co
 async function fetchColabsAtivos(mes: number, ano: number) {
   const m = String(mes).padStart(2, "0");
   const start = `${ano}-${m}-01`;
-  const end   = `${ano}-${m}-31`;
+  // Calcula último dia real do mês (evita end_date=XX-31 em meses com 30 ou 28 dias)
+  const lastDay = new Date(ano, mes, 0).getDate();
+  const end   = `${ano}-${m}-${String(lastDay).padStart(2, "0")}`;
   const cols  = "id_colaborador,nome_colaborador";
 
   const [sv, op] = await Promise.all([
@@ -237,3 +239,4 @@ export default function ConfigColaboradores() {
     </div>
   );
 }
+
