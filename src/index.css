@@ -129,17 +129,17 @@
 @layer components {
   /* === KPI / Metric Card === */
   .metric-card {
-    @apply bg-card rounded-xl border p-[18px] shadow-sm transition-all duration-200;
+    @apply bg-card rounded-xl border p-3 sm:p-[18px] shadow-sm transition-all duration-200 min-w-0 overflow-hidden;
   }
   .metric-card:hover { box-shadow: 0 4px 16px rgba(15,29,53,0.08), 0 2px 4px rgba(15,29,53,0.04); }
 
   .metric-value {
     font-family: var(--font-mono);
-    @apply text-[26px] font-bold tracking-tight text-foreground leading-none;
+    @apply text-[20px] sm:text-[26px] font-bold tracking-tight text-foreground leading-none truncate;
     letter-spacing: -0.5px;
   }
   .metric-label {
-    @apply text-[11px] font-semibold uppercase tracking-wider;
+    @apply text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider leading-tight;
     color: hsl(var(--text-muted));
   }
   .metric-sub {
@@ -217,3 +217,4 @@
     color: rgba(255, 255, 255, 0.35);
   }
 }
+
