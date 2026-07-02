@@ -305,6 +305,11 @@ export default function GondolaLoja() {
               ref={buscaRef}
               value={busca}
               onChange={e => setBusca(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && resultados.length > 0) {
+                  addMutation.mutate(resultados[0]);
+                }
+              }}
               placeholder="Referência ou nome do produto..."
               className="w-full pl-9 pr-4 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
@@ -433,4 +438,5 @@ export default function GondolaLoja() {
     </div>
   );
 }
+
 
