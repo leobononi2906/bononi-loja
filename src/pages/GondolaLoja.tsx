@@ -68,10 +68,10 @@ function imprimirEtiquetas(itens: GondolaItem[]) {
 // ─── Painel de busca — componente separado para isolar estado ──────────
 function PainelBusca({
   refsNaGondola,
-  onAdicionar,
+  onAdicionado,
 }: {
   refsNaGondola: Set<string>;
-  onAdicionar: (prod: ProdutoBusca) => void;
+  onAdicionado: () => void;
 }) {
   const [busca, setBusca] = useState("");
   const [resultados, setResultados] = useState<ProdutoBusca[]>([]);
@@ -80,6 +80,19 @@ function PainelBusca({
   const [ultimoAdicionado, setUltimoAdicionado] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Mutation fica aqui dentro — não afeta o pai ao resolver
+  const addMutation = useMutation({
+    mutationFn: async (prod: ProdutoBusca) => {
+      const { error } = await supabase.from("loja_gondola").upsert({
+        referencia: prod.referencia,
+        nome: prod.nome,
+        preco_etiqueta: prod.preco_venda,
+      }, { onConflict: "referencia" });
+      if (error) throw error;
+    },
+    onSuccess: () => onAdicionado(),
+  });
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -105,13 +118,14 @@ function PainelBusca({
   }, [busca, buscar]);
 
   function adicionar(prod: ProdutoBusca) {
-    onAdicionar(prod);
+    addMutation.mutate(prod);
     setBusca("");
     setResultados([]);
     setIdx(-1);
     setUltimoAdicionado(prod.referencia);
     setTimeout(() => setUltimoAdicionado(null), 2000);
-    setTimeout(() => inputRef.current?.focus(), 50);
+    // Foco imediato — não depende do ciclo de render do pai
+    inputRef.current?.focus();
   }
 
   function onKey(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -215,17 +229,7 @@ export default function GondolaLoja() {
   const divergentes = gondola.filter(divergencia);
   const okCount = gondola.filter(i => !divergencia(i) && i.preco_etiqueta != null).length;
 
-  const addMutation = useMutation({
-    mutationFn: async (prod: ProdutoBusca) => {
-      const { error } = await supabase.from("loja_gondola").upsert({
-        referencia: prod.referencia,
-        nome: prod.nome,
-        preco_etiqueta: prod.preco_venda,
-      }, { onConflict: "referencia" });
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["gondola"] }),
-  });
+  // addMutation vive dentro do PainelBusca — aqui só invalidamos o cache
 
   const removeMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -310,7 +314,7 @@ export default function GondolaLoja() {
           </div>
           <PainelBusca
             refsNaGondola={refsNaGondola}
-            onAdicionar={(prod) => addMutation.mutate(prod)}
+            onAdicionado={() => qc.invalidateQueries({ queryKey: ["gondola"] })}
           />
         </div>
       )}
@@ -398,3 +402,4 @@ export default function GondolaLoja() {
     </div>
   );
 }
+
