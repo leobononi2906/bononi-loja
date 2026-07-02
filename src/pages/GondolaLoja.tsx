@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { Search, Plus, Trash2, Printer, RefreshCw, AlertTriangle, CheckCircle2, Tag } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Search, Plus, Trash2, Printer, RefreshCw, AlertTriangle, CheckCircle2, Tag, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -30,70 +30,34 @@ function divergencia(item: GondolaItem) {
   return Math.abs(item.preco_etiqueta - item.preco_atual) > 0.009;
 }
 
-// ─── Impressão via iframe oculto — style 100% inline, sem CSS externo ──
+// ─── Impressão via iframe oculto com style inline ──────────────────────
 function imprimirEtiquetas(itens: GondolaItem[]) {
-  // Monta cada etiqueta com style inline puro — não depende de CSS do browser
   const etiquetasHtml = itens.map(item => {
     const preco = item.preco_atual ?? item.preco_etiqueta ?? 0;
     const [intPart, decPart] = preco.toFixed(2).split(".");
     const intFmt = Number(intPart).toLocaleString("pt-BR");
-    // Trunca nome em 2 linhas manualmente — máximo 60 chars por linha
     const nome = item.nome.length > 52 ? item.nome.slice(0, 52) + "…" : item.nome;
-
-    return `
-      <div style="
-        width:91mm; height:30mm;
-        padding: 4mm 3mm 2mm 3mm;
-        display:flex; flex-direction:column; justify-content:space-between;
-        page-break-after:always; page-break-inside:avoid;
-        font-family:Arial,sans-serif; color:#000; overflow:hidden;
-        box-sizing:border-box;
-      ">
-        <div style="font-size:9pt; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-          Referência ${item.referencia}
+    return `<div style="width:91mm;height:30mm;padding:4mm 3mm 2mm 3mm;display:flex;flex-direction:column;justify-content:space-between;page-break-after:always;page-break-inside:avoid;font-family:Arial,sans-serif;color:#000;overflow:hidden;box-sizing:border-box;">
+      <div style="font-size:9pt;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Referência ${item.referencia}</div>
+      <div style="font-size:11pt;font-weight:bold;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word;flex:1;margin:1mm 0;">${nome}</div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;">
+        <div style="display:flex;align-items:baseline;gap:1mm;">
+          <span style="font-size:11pt;font-weight:bold;">R$</span>
+          <span style="font-size:22pt;font-weight:bold;letter-spacing:-0.5px;line-height:1;">${intFmt},${decPart}</span>
         </div>
-        <div style="
-          font-size:11pt; font-weight:bold; line-height:1.2;
-          overflow:hidden; word-break:break-word;
-          display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
-          flex:1; margin:1mm 0;
-        ">
-          ${nome}
-        </div>
-        <div style="display:flex; align-items:baseline; justify-content:space-between;">
-          <div style="display:flex; align-items:baseline; gap:1mm;">
-            <span style="font-size:11pt; font-weight:bold;">R$</span>
-            <span style="font-size:22pt; font-weight:bold; letter-spacing:-0.5px; line-height:1;">${intFmt},${decPart}</span>
-          </div>
-          <span style="font-size:7pt; color:#555;">(Com Trib.)</span>
-        </div>
-      </div>`;
+        <span style="font-size:7pt;color:#555;">(Com Trib.)</span>
+      </div>
+    </div>`;
   }).join("");
 
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  @page { size:91mm 30mm; margin:0; }
-  body { width:91mm; background:#fff; }
-</style>
-</head>
-<body>${etiquetasHtml}</body>
-</html>`;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>*{margin:0;padding:0;box-sizing:border-box;}@page{size:91mm 30mm;margin:0;}body{width:91mm;background:#fff;}</style></head><body>${etiquetasHtml}</body></html>`;
 
-  // Cria iframe oculto na página — evita popup bloqueado e respeita CSS
   const iframe = document.createElement("iframe");
   iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:91mm;height:30mm;border:none;";
   document.body.appendChild(iframe);
-
   const doc = iframe.contentDocument || iframe.contentWindow?.document;
   if (!doc) return;
-  doc.open();
-  doc.write(html);
-  doc.close();
-
+  doc.open(); doc.write(html); doc.close();
   setTimeout(() => {
     iframe.contentWindow?.focus();
     iframe.contentWindow?.print();
@@ -101,75 +65,155 @@ function imprimirEtiquetas(itens: GondolaItem[]) {
   }, 500);
 }
 
-export default function GondolaLoja() {
-  const qc = useQueryClient();
+// ─── Painel de busca — componente separado para isolar estado ──────────
+function PainelBusca({
+  refsNaGondola,
+  onAdicionar,
+}: {
+  refsNaGondola: Set<string>;
+  onAdicionar: (prod: ProdutoBusca) => void;
+}) {
   const [busca, setBusca] = useState("");
   const [resultados, setResultados] = useState<ProdutoBusca[]>([]);
   const [buscando, setBuscando] = useState(false);
-  const [mostrarBusca, setMostrarBusca] = useState(false);
-  const [idxSelecionado, setIdxSelecionado] = useState(-1);
-  const [adicionadoRef, setAdicionadoRef] = useState<string | null>(null);
-  const buscaRef = useRef<HTMLInputElement>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [idx, setIdx] = useState(-1);
+  const [ultimoAdicionado, setUltimoAdicionado] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const buscar = useCallback(async (termo: string) => {
+    if (termo.length < 2) { setResultados([]); setIdx(-1); return; }
+    setBuscando(true);
+    try {
+      const q = supabase.from("bling_produtos_sync").select("id_produto,referencia,nome,preco").range(0, 19);
+      if (/^\d+$/.test(termo)) q.ilike("referencia", `%${termo}%`);
+      else q.ilike("nome", `%${termo}%`);
+      const { data } = await q;
+      setResultados((data ?? []).map(d => ({ ...d, preco_venda: Number(d.preco) })));
+      setIdx(-1);
+    } finally {
+      setBuscando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => buscar(busca), 350);
+    return () => { if (timer.current) clearTimeout(timer.current); };
+  }, [busca, buscar]);
+
+  function adicionar(prod: ProdutoBusca) {
+    onAdicionar(prod);
+    setBusca("");
+    setResultados([]);
+    setIdx(-1);
+    setUltimoAdicionado(prod.referencia);
+    setTimeout(() => setUltimoAdicionado(null), 2000);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }
+
+  function onKey(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") { e.preventDefault(); setIdx(i => Math.min(i + 1, resultados.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setIdx(i => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter" && resultados.length > 0) {
+      adicionar(idx >= 0 ? resultados[idx] : resultados[0]);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* Último adicionado */}
+      {ultimoAdicionado && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-950/30 border border-green-200 rounded-lg text-sm text-green-700 font-medium">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <span>Adicionado à gôndola — pronto para o próximo</span>
+        </div>
+      )}
+
+      {/* Campo de busca */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <input
+          ref={inputRef}
+          value={busca}
+          onChange={e => setBusca(e.target.value)}
+          onKeyDown={onKey}
+          placeholder="Referência ou nome do produto..."
+          className="w-full pl-9 pr-4 py-2.5 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+      </div>
+
+      {/* Instrução */}
+      <p className="text-[11px] text-muted-foreground px-1">↑↓ navega na lista · Enter adiciona · Esc fecha</p>
+
+      {/* Resultados */}
+      {buscando && <p className="text-xs text-muted-foreground px-1">Buscando...</p>}
+      {resultados.length > 0 && (
+        <div className="border rounded-lg divide-y overflow-hidden">
+          {resultados.map((prod, i) => {
+            const jaAdicionado = refsNaGondola.has(prod.referencia);
+            const selecionado = i === idx;
+            return (
+              <div
+                key={prod.id_produto}
+                onClick={() => !jaAdicionado && adicionar(prod)}
+                className={`flex items-center justify-between px-3 py-2.5 transition-colors
+                  ${jaAdicionado ? "opacity-50 cursor-default bg-muted/30" : "cursor-pointer"}
+                  ${selecionado && !jaAdicionado ? "bg-primary/10 border-l-2 border-l-primary" : ""}
+                  ${!selecionado && !jaAdicionado ? "hover:bg-muted/50" : ""}
+                `}
+              >
+                <div className="min-w-0 flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground font-mono shrink-0">{prod.referencia}</span>
+                  <span className="text-sm font-medium truncate">{prod.nome}</span>
+                  {jaAdicionado && (
+                    <span className="text-[10px] text-green-600 font-semibold shrink-0 bg-green-100 px-1.5 py-0.5 rounded">
+                      ✓ Na gôndola
+                    </span>
+                  )}
+                </div>
+                <span className="text-sm font-semibold ml-3 shrink-0">{fmtPreco(prod.preco_venda)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {busca.length >= 2 && !buscando && resultados.length === 0 && (
+        <p className="text-xs text-muted-foreground px-1">Nenhum produto encontrado.</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Componente principal ──────────────────────────────────────────────
+export default function GondolaLoja() {
+  const qc = useQueryClient();
+  const [painelAberto, setPainelAberto] = useState(false);
 
   const { data: gondola = [], isLoading } = useQuery({
     queryKey: ["gondola"],
     queryFn: async () => {
       const { data: items, error } = await supabase
-        .from("loja_gondola")
-        .select("*")
-        .order("criado_em", { ascending: true })
-        .range(0, 9999);
+        .from("loja_gondola").select("*").order("criado_em", { ascending: true }).range(0, 9999);
       if (error) throw error;
       if (!items || items.length === 0) return [];
-
       const refs = items.map(i => i.referencia);
-      const { data: precos } = await supabase
-        .from("bling_produtos_sync")
-        .select("referencia, preco")
-        .in("referencia", refs)
-        .range(0, 9999);
-
-      const mapaPrecos: Record<string, number> = {};
-      (precos ?? []).forEach(p => { mapaPrecos[p.referencia] = Number(p.preco); });
-
-      return items.map(i => ({
-        ...i,
-        preco_atual: mapaPrecos[i.referencia] ?? null,
-      })) as GondolaItem[];
+      const { data: precos } = await supabase.from("bling_produtos_sync")
+        .select("referencia,preco").in("referencia", refs).range(0, 9999);
+      const mapa: Record<string, number> = {};
+      (precos ?? []).forEach(p => { mapa[p.referencia] = Number(p.preco); });
+      return items.map(i => ({ ...i, preco_atual: mapa[i.referencia] ?? null })) as GondolaItem[];
     },
     refetchInterval: 60_000,
   });
 
+  // Set de referências já na gôndola — para mostrar badge na busca
+  const refsNaGondola = new Set(gondola.map(i => i.referencia));
+
   const divergentes = gondola.filter(divergencia);
   const okCount = gondola.filter(i => !divergencia(i) && i.preco_etiqueta != null).length;
-
-  async function buscarProduto(termo: string) {
-    if (termo.length < 2) { setResultados([]); return; }
-    setBuscando(true);
-    try {
-      const q = supabase
-        .from("bling_produtos_sync")
-        .select("id_produto, referencia, nome, preco")
-        .range(0, 19);
-      if (/^\d+$/.test(termo)) {
-        q.ilike("referencia", `%${termo}%`);
-      } else {
-        q.ilike("nome", `%${termo}%`);
-      }
-      const { data } = await q;
-      setResultados((data ?? []).map(d => ({ ...d, preco_venda: Number(d.preco) })));
-      setIdxSelecionado(-1);
-    } finally {
-      setBuscando(false);
-    }
-  }
-
-  useEffect(() => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => buscarProduto(busca), 350);
-    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
-  }, [busca]);
 
   const addMutation = useMutation({
     mutationFn: async (prod: ProdutoBusca) => {
@@ -179,18 +223,8 @@ export default function GondolaLoja() {
         preco_etiqueta: prod.preco_venda,
       }, { onConflict: "referencia" });
       if (error) throw error;
-      return prod.referencia;
     },
-    onSuccess: (ref) => {
-      qc.invalidateQueries({ queryKey: ["gondola"] });
-      setBusca("");
-      setResultados([]);
-      setIdxSelecionado(-1);
-      // Mostra feedback "Adicionado" por 1.5s e foca de volta no input
-      setAdicionadoRef(ref);
-      setTimeout(() => setAdicionadoRef(null), 1500);
-      setTimeout(() => buscaRef.current?.focus(), 100);
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["gondola"] }),
   });
 
   const removeMutation = useMutation({
@@ -204,8 +238,7 @@ export default function GondolaLoja() {
   const atualizarMutation = useMutation({
     mutationFn: async (item: GondolaItem) => {
       const { error } = await supabase.from("loja_gondola").update({
-        preco_etiqueta: item.preco_atual,
-        data_ultima_impressao: null,
+        preco_etiqueta: item.preco_atual, data_ultima_impressao: null,
       }).eq("id", item.id);
       if (error) throw error;
     },
@@ -224,20 +257,12 @@ export default function GondolaLoja() {
     qc.invalidateQueries({ queryKey: ["gondola"] });
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setIdxSelecionado(i => Math.min(i + 1, resultados.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setIdxSelecionado(i => Math.max(i - 1, 0));
-    } else if (e.key === "Enter" && resultados.length > 0) {
-      const prod = idxSelecionado >= 0 ? resultados[idxSelecionado] : resultados[0];
-      addMutation.mutate(prod);
-    } else if (e.key === "Escape") {
-      setMostrarBusca(false);
-    }
-  }
+  // Fecha painel com Esc globalmente
+  useEffect(() => {
+    function onEsc(e: KeyboardEvent) { if (e.key === "Escape") setPainelAberto(false); }
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, []);
 
   return (
     <div className="dashboard-section space-y-4 p-4 sm:p-6">
@@ -248,15 +273,11 @@ export default function GondolaLoja() {
           <div className="metric-value text-[22px]">{gondola.length}</div>
         </div>
         <div className="metric-card border-l-4" style={{ borderLeftColor: "hsl(var(--destructive))" }}>
-          <div className="metric-label flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3 text-destructive" /> Divergentes
-          </div>
+          <div className="metric-label flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-destructive" /> Divergentes</div>
           <div className="metric-value text-[22px] text-destructive">{divergentes.length}</div>
         </div>
         <div className="metric-card border-l-4" style={{ borderLeftColor: "hsl(var(--success))" }}>
-          <div className="metric-label flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3 text-green-600" /> OK
-          </div>
+          <div className="metric-label flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-green-600" /> OK</div>
           <div className="metric-value text-[22px] text-green-600">{okCount}</div>
         </div>
       </div>
@@ -264,76 +285,33 @@ export default function GondolaLoja() {
       {/* Barra de ações */}
       <div className="flex items-center gap-2 flex-wrap">
         <button
-          onClick={() => { setMostrarBusca(true); setTimeout(() => buscaRef.current?.focus(), 100); }}
+          onClick={() => setPainelAberto(true)}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           <Plus className="h-4 w-4" /> Adicionar produto
         </button>
         {divergentes.length > 0 && (
-          <button
-            onClick={() => handleImprimir(divergentes)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-destructive text-white hover:bg-destructive/90 transition-colors"
-          >
+          <button onClick={() => handleImprimir(divergentes)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-destructive text-white hover:bg-destructive/90 transition-colors">
             <Printer className="h-4 w-4" /> Imprimir divergentes ({divergentes.length})
           </button>
         )}
       </div>
 
-      {/* Busca de produto — fica aberta até Esc */}
-      {mostrarBusca && (
+      {/* Painel de busca — sempre montado quando aberto, nunca desmonta sozinho */}
+      {painelAberto && (
         <div className="chart-container space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground">Adicionar produto à gôndola</h3>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground">↑↓ navega · Enter adiciona · Esc fecha</span>
-              <button
-                onClick={() => setMostrarBusca(false)}
-                className="text-xs text-muted-foreground hover:text-foreground px-2 py-0.5 rounded border hover:bg-muted transition-colors"
-              >Fechar</button>
-            </div>
+            <button onClick={() => setPainelAberto(false)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border hover:bg-muted transition-colors">
+              <X className="h-3 w-3" /> Fechar
+            </button>
           </div>
-          {/* Feedback adicionado */}
-          {adicionadoRef && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg text-sm text-green-700 dark:text-green-400 font-medium">
-              <CheckCircle2 className="h-4 w-4" /> Adicionado à gôndola
-            </div>
-          )}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              ref={buscaRef}
-              value={busca}
-              onChange={e => setBusca(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Referência ou nome do produto..."
-              className="w-full pl-9 pr-4 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
-          {buscando && <p className="text-xs text-muted-foreground">Buscando...</p>}
-          {resultados.length > 0 && (
-            <div className="border rounded-lg divide-y overflow-hidden">
-              {resultados.map((prod, idx) => (
-                <div
-                  key={prod.id_produto}
-                  className={`flex items-center justify-between px-3 py-2.5 cursor-pointer transition-colors ${
-                    idx === idxSelecionado
-                      ? "bg-primary/10 border-l-2 border-primary"
-                      : "hover:bg-muted/50"
-                  }`}
-                  onClick={() => addMutation.mutate(prod)}
-                >
-                  <div className="min-w-0">
-                    <span className="text-xs text-muted-foreground font-mono mr-2">{prod.referencia}</span>
-                    <span className="text-sm font-medium">{prod.nome}</span>
-                  </div>
-                  <span className="text-sm font-semibold ml-3 shrink-0">{fmtPreco(prod.preco_venda)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {busca.length >= 2 && !buscando && resultados.length === 0 && (
-            <p className="text-xs text-muted-foreground">Nenhum produto encontrado.</p>
-          )}
+          <PainelBusca
+            refsNaGondola={refsNaGondola}
+            onAdicionar={(prod) => addMutation.mutate(prod)}
+          />
         </div>
       )}
 
@@ -366,9 +344,7 @@ export default function GondolaLoja() {
                   return (
                     <tr key={item.id} className={`border-b border-border/50 hover:bg-muted/30 ${div ? "bg-red-50/40 dark:bg-red-950/10" : ""}`}>
                       <td className="py-2.5 px-3 text-xs font-mono text-muted-foreground">{item.referencia}</td>
-                      <td className="py-2.5 px-3 text-xs font-medium max-w-[200px]">
-                        <span className="line-clamp-2">{item.nome}</span>
-                      </td>
+                      <td className="py-2.5 px-3 text-xs font-medium max-w-[200px]"><span className="line-clamp-2">{item.nome}</span></td>
                       <td className="py-2.5 px-3 text-xs text-right font-mono">
                         {fmtPreco(item.preco_etiqueta)}
                         {item.data_ultima_impressao && (
@@ -422,4 +398,3 @@ export default function GondolaLoja() {
     </div>
   );
 }
-
