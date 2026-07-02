@@ -48,14 +48,13 @@ function imprimirEtiquetas(itens: GondolaItem[]) {
     width: 30mm;
   }
   @page {
-    size: 30mm 91mm;
+    size: 91mm 30mm;
     margin: 0;
   }
   .etiqueta {
-    width: 30mm;
-    height: 90mm; /* 91mm - 0.5mm margem topo e base */
-    margin: 0.5mm 0;
-    padding: 5mm 2.5mm 2mm 2.5mm; /* topo maior por causa do cortezinho */
+    width: 91mm;
+    height: 30mm;
+    padding: 5mm 3mm 2mm 3mm; /* topo maior por causa do cortezinho */
     page-break-after: always;
     page-break-inside: avoid;
     display: flex;
@@ -442,6 +441,7 @@ export default function GondolaLoja() {
     </div>
   );
 }
+
 
 
 
