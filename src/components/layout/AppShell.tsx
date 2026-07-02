@@ -25,6 +25,7 @@ const ROUTE_TITLES: Record<string, { title: string; subtitle: string }> = {
   "/servicos/patio": { title: "Serviços · Pátio", subtitle: "Central operacional da oficina" },
   "/servicos/tapecaria": { title: "Serviços · Tapeçaria", subtitle: "Produção e produtividade" },
   "/servicos/config-colaboradores": { title: "Config. Colaboradores", subtitle: "Defina o setor de cada colaborador" },
+  "/gondola": { title: "Gôndola · Etiquetas", subtitle: "Gestão de preços na gôndola" },
 };
 
 export function AppShell() {
@@ -75,3 +76,4 @@ export function AppShell() {
     </Ctx.Provider>
   );
 }
+
