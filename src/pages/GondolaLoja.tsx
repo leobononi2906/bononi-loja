@@ -137,6 +137,7 @@ export default function GondolaLoja() {
   const [resultados, setResultados] = useState<ProdutoBusca[]>([]);
   const [buscando, setBuscando] = useState(false);
   const [mostrarBusca, setMostrarBusca] = useState(false);
+  const [idxSelecionado, setIdxSelecionado] = useState(-1);
   const buscaRef = useRef<HTMLInputElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -195,6 +196,7 @@ export default function GondolaLoja() {
 
       const { data } = await q;
       setResultados((data ?? []).map(d => ({ ...d, preco_venda: Number(d.preco) })));
+      setIdxSelecionado(-1);
     } finally {
       setBuscando(false);
     }
@@ -312,8 +314,17 @@ export default function GondolaLoja() {
               value={busca}
               onChange={e => setBusca(e.target.value)}
               onKeyDown={e => {
-                if (e.key === "Enter" && resultados.length > 0) {
-                  addMutation.mutate(resultados[0]);
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setIdxSelecionado(i => Math.min(i + 1, resultados.length - 1));
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setIdxSelecionado(i => Math.max(i - 1, 0));
+                } else if (e.key === "Enter" && resultados.length > 0) {
+                  const prod = idxSelecionado >= 0 ? resultados[idxSelecionado] : resultados[0];
+                  addMutation.mutate(prod);
+                } else if (e.key === "Escape") {
+                  setMostrarBusca(false);
                 }
               }}
               placeholder="Referência ou nome do produto..."
@@ -323,10 +334,10 @@ export default function GondolaLoja() {
           {buscando && <p className="text-xs text-muted-foreground">Buscando...</p>}
           {resultados.length > 0 && (
             <div className="border rounded-lg divide-y overflow-hidden">
-              {resultados.map(prod => (
+              {resultados.map((prod, idx) => (
                 <div
                   key={prod.id_produto}
-                  className="flex items-center justify-between px-3 py-2.5 hover:bg-muted/50 cursor-pointer"
+                  className={`flex items-center justify-between px-3 py-2.5 cursor-pointer transition-colors ${idx === idxSelecionado ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-muted/50"}`}
                   onClick={() => addMutation.mutate(prod)}
                 >
                   <div className="min-w-0">
@@ -444,6 +455,7 @@ export default function GondolaLoja() {
     </div>
   );
 }
+
 
 
 
