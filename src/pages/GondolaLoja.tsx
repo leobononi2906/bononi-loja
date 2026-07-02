@@ -34,7 +34,8 @@ function divergencia(item: GondolaItem) {
 
 // ─── Componente de impressão ──────────────────────────────────────────
 function imprimirEtiquetas(itens: GondolaItem[]) {
-  // Argox 91x30mm — landscape (etiqueta deitada: 91mm largura, 30mm altura)
+  // Argox retrato — 30mm largura × 91mm altura
+  // @page size = largura × altura do papel (retrato = 30 x 91)
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -44,16 +45,16 @@ function imprimirEtiquetas(itens: GondolaItem[]) {
   html, body {
     font-family: Arial, sans-serif;
     background: #fff;
-    width: 91mm;
+    width: 30mm;
   }
   @page {
-    size: 91mm 30mm landscape;
+    size: 30mm 91mm;
     margin: 0;
   }
   .etiqueta {
-    width: 91mm;
-    height: 30mm;
-    padding: 2mm 3mm;
+    width: 30mm;
+    height: 91mm;
+    padding: 5mm 2.5mm 2.5mm 2.5mm; /* topo maior por causa do cortezinho */
     page-break-after: always;
     page-break-inside: avoid;
     display: flex;
@@ -62,60 +63,62 @@ function imprimirEtiquetas(itens: GondolaItem[]) {
     overflow: hidden;
   }
   .ref {
-    font-size: 6.5pt;
+    font-size: 6pt;
     font-weight: bold;
     color: #000;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    margin-bottom: 1.5mm;
   }
   .nome {
-    font-size: 7.5pt;
+    font-size: 9pt;
     font-weight: bold;
     color: #000;
-    line-height: 1.15;
+    line-height: 1.2;
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     word-break: break-word;
-    max-height: 12mm;
+    flex: 1;
   }
   .preco-row {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-top: auto;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5mm;
+    margin-top: 2mm;
   }
   .preco-esq {
     display: flex;
     align-items: baseline;
     gap: 1mm;
   }
-  .rs { font-size: 9pt; font-weight: bold; color: #000; }
-  .valor { font-size: 16pt; font-weight: bold; color: #000; letter-spacing: -0.5px; }
+  .rs { font-size: 10pt; font-weight: bold; color: #000; }
+  .valor { font-size: 20pt; font-weight: bold; color: #000; letter-spacing: -0.5px; }
   .trib { font-size: 6pt; color: #444; }
 </style>
 </head>
 <body>
-${itens.map(item => {
+\${itens.map(item => {
   const preco = item.preco_atual ?? item.preco_etiqueta ?? 0;
   const [intPart, decPart] = preco.toFixed(2).split(".");
   const intFmt = Number(intPart).toLocaleString("pt-BR");
-  return `<div class="etiqueta">
-    <div class="ref">Referência ${item.referencia}</div>
-    <div class="nome">${item.nome}</div>
+  return \`<div class="etiqueta">
+    <div class="ref">Referência \${item.referencia}</div>
+    <div class="nome">\${item.nome}</div>
     <div class="preco-row">
       <div class="preco-esq">
         <span class="rs">R$</span>
-        <span class="valor">${intFmt},${decPart}</span>
+        <span class="valor">\${intFmt},\${decPart}</span>
       </div>
       <div class="trib">(Com Trib.)</div>
     </div>
-  </div>`;
+  </div>\`;
 }).join("")}
 </body>
-</html>`;
+</html>\`;
 
   const win = window.open("", "_blank", "width=800,height=600");
   if (!win) return;
@@ -438,5 +441,6 @@ export default function GondolaLoja() {
     </div>
   );
 }
+
 
 
