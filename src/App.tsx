@@ -10,6 +10,7 @@ import ServicosResumo from "./pages/ServicosResumo";
 import ServicosPatio from "./pages/ServicosPatio";
 import ServicosTapecaria from "./pages/ServicosTapecaria";
 import ConfigColaboradores from "./pages/ConfigColaboradores";
+import GondolaLoja from "./pages/GondolaLoja";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
             <Route path="/servicos/patio" element={<ServicosPatio />} />
             <Route path="/servicos/tapecaria" element={<ServicosTapecaria />} />
             <Route path="/servicos/config-colaboradores" element={<ConfigColaboradores />} />
+            <Route path="/gondola" element={<GondolaLoja />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
@@ -38,3 +40,4 @@ const App = () => (
 );
 
 export default App;
+
