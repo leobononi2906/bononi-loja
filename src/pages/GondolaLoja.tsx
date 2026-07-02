@@ -120,12 +120,14 @@ function imprimirEtiquetas(itens: GondolaItem[]) {
 </body>
 </html>\`;
 
-  const win = window.open("", "_blank", "width=800,height=600");
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, "_blank");
   if (!win) return;
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => { win.print(); }, 400);
+  setTimeout(() => {
+    win.print();
+    URL.revokeObjectURL(url);
+  }, 600);
 }
 
 // ─── Componente principal ─────────────────────────────────────────────
@@ -218,7 +220,8 @@ export default function GondolaLoja() {
       qc.invalidateQueries({ queryKey: ["gondola"] });
       setBusca("");
       setResultados([]);
-      setMostrarBusca(false);
+      // Mantém painel aberto e foca no input para próximo produto
+      setTimeout(() => buscaRef.current?.focus(), 100);
     },
   });
 
@@ -441,6 +444,7 @@ export default function GondolaLoja() {
     </div>
   );
 }
+
 
 
 
