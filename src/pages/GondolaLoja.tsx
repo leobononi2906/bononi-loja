@@ -45,16 +45,16 @@ function imprimirEtiquetas(itens: GondolaItem[]) {
   html, body {
     font-family: Arial, sans-serif;
     background: #fff;
-    width: 30mm;
+    width: 100vw;
   }
   @page {
     size: 91mm 30mm;
     margin: 0;
   }
   .etiqueta {
-    width: 91mm;
-    height: 30mm;
-    padding: 5mm 3mm 2mm 3mm; /* topo maior por causa do cortezinho */
+    width: 100vw;
+    height: 100vh;
+    padding: 8vw 3vw 2vw 3vw;
     page-break-after: always;
     page-break-inside: avoid;
     display: flex;
@@ -63,16 +63,16 @@ function imprimirEtiquetas(itens: GondolaItem[]) {
     overflow: hidden;
   }
   .ref {
-    font-size: 16px;
+    font-size: 4vw;
     font-weight: bold;
     color: #000;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-bottom: 1.5mm;
+    margin-bottom: 1vw;
   }
   .nome {
-    font-size: 22px;
+    font-size: 7vw;
     font-weight: bold;
     color: #000;
     line-height: 1.2;
@@ -85,19 +85,18 @@ function imprimirEtiquetas(itens: GondolaItem[]) {
   }
   .preco-row {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5mm;
-    margin-top: 2mm;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-top: 1vw;
   }
   .preco-esq {
     display: flex;
     align-items: baseline;
-    gap: 1mm;
+    gap: 1vw;
   }
-  .rs { font-size: 16px; font-weight: bold; color: #000; }
-  .valor { font-size: 42px; font-weight: bold; color: #000; letter-spacing: -0.5px; }
-  .trib { font-size: 10px; color: #444; }
+  .rs { font-size: 5vw; font-weight: bold; color: #000; }
+  .valor { font-size: 14vw; font-weight: bold; color: #000; letter-spacing: -0.5px; }
+  .trib { font-size: 3.5vw; color: #444; }
 </style>
 </head>
 <body>
@@ -455,6 +454,7 @@ export default function GondolaLoja() {
     </div>
   );
 }
+
 
 
 
