@@ -264,7 +264,7 @@ export default function GondolaLoja() {
       {/* Barra de ações */}
       <div className="flex items-center gap-2 flex-wrap">
         <button
-          onClick={() => { setMostrarBusca(v => !v); setTimeout(() => buscaRef.current?.focus(), 100); }}
+          onClick={() => { setMostrarBusca(true); setTimeout(() => buscaRef.current?.focus(), 100); }}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           <Plus className="h-4 w-4" /> Adicionar produto
@@ -284,7 +284,13 @@ export default function GondolaLoja() {
         <div className="chart-container space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground">Adicionar produto à gôndola</h3>
-            <span className="text-xs text-muted-foreground">↑↓ navega · Enter adiciona · Esc fecha</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground">↑↓ navega · Enter adiciona · Esc fecha</span>
+              <button
+                onClick={() => setMostrarBusca(false)}
+                className="text-xs text-muted-foreground hover:text-foreground px-2 py-0.5 rounded border hover:bg-muted transition-colors"
+              >Fechar</button>
+            </div>
           </div>
           {/* Feedback adicionado */}
           {adicionadoRef && (
@@ -416,3 +422,4 @@ export default function GondolaLoja() {
     </div>
   );
 }
+
