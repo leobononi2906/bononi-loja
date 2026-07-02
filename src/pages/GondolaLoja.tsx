@@ -63,7 +63,7 @@ function imprimirEtiquetas(itens: GondolaItem[]) {
     overflow: hidden;
   }
   .ref {
-    font-size: 9pt;
+    font-size: 16px;
     font-weight: bold;
     color: #000;
     white-space: nowrap;
@@ -72,7 +72,7 @@ function imprimirEtiquetas(itens: GondolaItem[]) {
     margin-bottom: 1.5mm;
   }
   .nome {
-    font-size: 13pt;
+    font-size: 22px;
     font-weight: bold;
     color: #000;
     line-height: 1.2;
@@ -95,9 +95,9 @@ function imprimirEtiquetas(itens: GondolaItem[]) {
     align-items: baseline;
     gap: 1mm;
   }
-  .rs { font-size: 10pt; font-weight: bold; color: #000; }
-  .valor { font-size: 24pt; font-weight: bold; color: #000; letter-spacing: -0.5px; }
-  .trib { font-size: 6pt; color: #444; }
+  .rs { font-size: 16px; font-weight: bold; color: #000; }
+  .valor { font-size: 42px; font-weight: bold; color: #000; letter-spacing: -0.5px; }
+  .trib { font-size: 10px; color: #444; }
 </style>
 </head>
 <body>
@@ -441,6 +441,7 @@ export default function GondolaLoja() {
     </div>
   );
 }
+
 
 
 
