@@ -3,7 +3,6 @@ import { Search, Plus, Trash2, Printer, RefreshCw, AlertTriangle, CheckCircle2, 
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-// ─── Tipos ───────────────────────────────────────────────────────────
 interface GondolaItem {
   id: number;
   referencia: string;
@@ -21,7 +20,6 @@ interface ProdutoBusca {
   preco_venda: number;
 }
 
-// ─── Formatação ───────────────────────────────────────────────────────
 function fmtPreco(v: number | null | undefined) {
   if (v == null) return "—";
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -32,104 +30,77 @@ function divergencia(item: GondolaItem) {
   return Math.abs(item.preco_etiqueta - item.preco_atual) > 0.009;
 }
 
-// ─── Componente de impressão ──────────────────────────────────────────
+// ─── Impressão via iframe oculto — style 100% inline, sem CSS externo ──
 function imprimirEtiquetas(itens: GondolaItem[]) {
-  // Argox retrato — 30mm largura × 91mm altura
-  // @page size = largura × altura do papel (retrato = 30 x 91)
+  // Monta cada etiqueta com style inline puro — não depende de CSS do browser
+  const etiquetasHtml = itens.map(item => {
+    const preco = item.preco_atual ?? item.preco_etiqueta ?? 0;
+    const [intPart, decPart] = preco.toFixed(2).split(".");
+    const intFmt = Number(intPart).toLocaleString("pt-BR");
+    // Trunca nome em 2 linhas manualmente — máximo 60 chars por linha
+    const nome = item.nome.length > 52 ? item.nome.slice(0, 52) + "…" : item.nome;
+
+    return `
+      <div style="
+        width:91mm; height:30mm;
+        padding: 4mm 3mm 2mm 3mm;
+        display:flex; flex-direction:column; justify-content:space-between;
+        page-break-after:always; page-break-inside:avoid;
+        font-family:Arial,sans-serif; color:#000; overflow:hidden;
+        box-sizing:border-box;
+      ">
+        <div style="font-size:9pt; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+          Referência ${item.referencia}
+        </div>
+        <div style="
+          font-size:11pt; font-weight:bold; line-height:1.2;
+          overflow:hidden; word-break:break-word;
+          display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+          flex:1; margin:1mm 0;
+        ">
+          ${nome}
+        </div>
+        <div style="display:flex; align-items:baseline; justify-content:space-between;">
+          <div style="display:flex; align-items:baseline; gap:1mm;">
+            <span style="font-size:11pt; font-weight:bold;">R$</span>
+            <span style="font-size:22pt; font-weight:bold; letter-spacing:-0.5px; line-height:1;">${intFmt},${decPart}</span>
+          </div>
+          <span style="font-size:7pt; color:#555;">(Com Trib.)</span>
+        </div>
+      </div>`;
+  }).join("");
+
   const html = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body {
-    font-family: Arial, sans-serif;
-    background: #fff;
-    width: 100vw;
-  }
-  @page {
-    size: 91mm 30mm;
-    margin: 0;
-  }
-  .etiqueta {
-    width: 100vw;
-    height: 100vh;
-    padding: 8vw 3vw 2vw 3vw;
-    page-break-after: always;
-    page-break-inside: avoid;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    overflow: hidden;
-  }
-  .ref {
-    font-size: 4vw;
-    font-weight: bold;
-    color: #000;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-bottom: 1vw;
-  }
-  .nome {
-    font-size: 7vw;
-    font-weight: bold;
-    color: #000;
-    line-height: 1.2;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    word-break: break-word;
-    flex: 1;
-  }
-  .preco-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-top: 1vw;
-  }
-  .preco-esq {
-    display: flex;
-    align-items: baseline;
-    gap: 1vw;
-  }
-  .rs { font-size: 5vw; font-weight: bold; color: #000; }
-  .valor { font-size: 14vw; font-weight: bold; color: #000; letter-spacing: -0.5px; }
-  .trib { font-size: 3.5vw; color: #444; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  @page { size:91mm 30mm; margin:0; }
+  body { width:91mm; background:#fff; }
 </style>
 </head>
-<body>
-\${itens.map(item => {
-  const preco = item.preco_atual ?? item.preco_etiqueta ?? 0;
-  const [intPart, decPart] = preco.toFixed(2).split(".");
-  const intFmt = Number(intPart).toLocaleString("pt-BR");
-  return \`<div class="etiqueta">
-    <div class="ref">Referência \${item.referencia}</div>
-    <div class="nome">\${item.nome}</div>
-    <div class="preco-row">
-      <div class="preco-esq">
-        <span class="rs">R$</span>
-        <span class="valor">\${intFmt},\${decPart}</span>
-      </div>
-      <div class="trib">(Com Trib.)</div>
-    </div>
-  </div>\`;
-}).join("")}
-</body>
-</html>\`;
+<body>${etiquetasHtml}</body>
+</html>`;
 
-  const blob = new Blob([html], { type: "text/html" });
-  const url = URL.createObjectURL(blob);
-  const win = window.open(url, "_blank");
-  if (!win) return;
+  // Cria iframe oculto na página — evita popup bloqueado e respeita CSS
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:91mm;height:30mm;border:none;";
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!doc) return;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
   setTimeout(() => {
-    win.print();
-    URL.revokeObjectURL(url);
-  }, 600);
+    iframe.contentWindow?.focus();
+    iframe.contentWindow?.print();
+    setTimeout(() => document.body.removeChild(iframe), 2000);
+  }, 500);
 }
 
-// ─── Componente principal ─────────────────────────────────────────────
 export default function GondolaLoja() {
   const qc = useQueryClient();
   const [busca, setBusca] = useState("");
@@ -137,10 +108,10 @@ export default function GondolaLoja() {
   const [buscando, setBuscando] = useState(false);
   const [mostrarBusca, setMostrarBusca] = useState(false);
   const [idxSelecionado, setIdxSelecionado] = useState(-1);
+  const [adicionadoRef, setAdicionadoRef] = useState<string | null>(null);
   const buscaRef = useRef<HTMLInputElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Carrega gôndola com preço atual
   const { data: gondola = [], isLoading } = useQuery({
     queryKey: ["gondola"],
     queryFn: async () => {
@@ -150,10 +121,8 @@ export default function GondolaLoja() {
         .order("criado_em", { ascending: true })
         .range(0, 9999);
       if (error) throw error;
-
       if (!items || items.length === 0) return [];
 
-      // Busca preços atuais em lote
       const refs = items.map(i => i.referencia);
       const { data: precos } = await supabase
         .from("bling_produtos_sync")
@@ -173,9 +142,8 @@ export default function GondolaLoja() {
   });
 
   const divergentes = gondola.filter(divergencia);
-  const okCount     = gondola.filter(i => !divergencia(i) && i.preco_etiqueta != null).length;
+  const okCount = gondola.filter(i => !divergencia(i) && i.preco_etiqueta != null).length;
 
-  // ── Busca produto no ERP
   async function buscarProduto(termo: string) {
     if (termo.length < 2) { setResultados([]); return; }
     setBuscando(true);
@@ -184,15 +152,11 @@ export default function GondolaLoja() {
         .from("bling_produtos_sync")
         .select("id_produto, referencia, nome, preco")
         .range(0, 19);
-
-      // Tenta referência exata primeiro, depois nome
-      const isNum = /^\d+$/.test(termo);
-      if (isNum) {
+      if (/^\d+$/.test(termo)) {
         q.ilike("referencia", `%${termo}%`);
       } else {
         q.ilike("nome", `%${termo}%`);
       }
-
       const { data } = await q;
       setResultados((data ?? []).map(d => ({ ...d, preco_venda: Number(d.preco) })));
       setIdxSelecionado(-1);
@@ -207,7 +171,6 @@ export default function GondolaLoja() {
     return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
   }, [busca]);
 
-  // ── Adiciona produto
   const addMutation = useMutation({
     mutationFn: async (prod: ProdutoBusca) => {
       const { error } = await supabase.from("loja_gondola").upsert({
@@ -216,17 +179,20 @@ export default function GondolaLoja() {
         preco_etiqueta: prod.preco_venda,
       }, { onConflict: "referencia" });
       if (error) throw error;
+      return prod.referencia;
     },
-    onSuccess: () => {
+    onSuccess: (ref) => {
       qc.invalidateQueries({ queryKey: ["gondola"] });
       setBusca("");
       setResultados([]);
-      // Mantém painel aberto e foca no input para próximo produto
+      setIdxSelecionado(-1);
+      // Mostra feedback "Adicionado" por 1.5s e foca de volta no input
+      setAdicionadoRef(ref);
+      setTimeout(() => setAdicionadoRef(null), 1500);
       setTimeout(() => buscaRef.current?.focus(), 100);
     },
   });
 
-  // ── Remove produto
   const removeMutation = useMutation({
     mutationFn: async (id: number) => {
       const { error } = await supabase.from("loja_gondola").delete().eq("id", id);
@@ -235,7 +201,6 @@ export default function GondolaLoja() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["gondola"] }),
   });
 
-  // ── Atualiza preço (confirmar sem imprimir)
   const atualizarMutation = useMutation({
     mutationFn: async (item: GondolaItem) => {
       const { error } = await supabase.from("loja_gondola").update({
@@ -247,10 +212,8 @@ export default function GondolaLoja() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["gondola"] }),
   });
 
-  // ── Imprime e salva preço
   async function handleImprimir(itens: GondolaItem[]) {
     imprimirEtiquetas(itens);
-    // Atualiza preco_etiqueta e data_ultima_impressao para cada item
     for (const item of itens) {
       if (item.preco_atual == null) continue;
       await supabase.from("loja_gondola").update({
@@ -259,6 +222,21 @@ export default function GondolaLoja() {
       }).eq("id", item.id);
     }
     qc.invalidateQueries({ queryKey: ["gondola"] });
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setIdxSelecionado(i => Math.min(i + 1, resultados.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setIdxSelecionado(i => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" && resultados.length > 0) {
+      const prod = idxSelecionado >= 0 ? resultados[idxSelecionado] : resultados[0];
+      addMutation.mutate(prod);
+    } else if (e.key === "Escape") {
+      setMostrarBusca(false);
+    }
   }
 
   return (
@@ -291,7 +269,6 @@ export default function GondolaLoja() {
         >
           <Plus className="h-4 w-4" /> Adicionar produto
         </button>
-
         {divergentes.length > 0 && (
           <button
             onClick={() => handleImprimir(divergentes)}
@@ -302,30 +279,26 @@ export default function GondolaLoja() {
         )}
       </div>
 
-      {/* Busca de produto */}
+      {/* Busca de produto — fica aberta até Esc */}
       {mostrarBusca && (
         <div className="chart-container space-y-3">
-          <h3 className="text-sm font-semibold text-foreground">Adicionar produto à gôndola</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">Adicionar produto à gôndola</h3>
+            <span className="text-xs text-muted-foreground">↑↓ navega · Enter adiciona · Esc fecha</span>
+          </div>
+          {/* Feedback adicionado */}
+          {adicionadoRef && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg text-sm text-green-700 dark:text-green-400 font-medium">
+              <CheckCircle2 className="h-4 w-4" /> Adicionado à gôndola
+            </div>
+          )}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               ref={buscaRef}
               value={busca}
               onChange={e => setBusca(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "ArrowDown") {
-                  e.preventDefault();
-                  setIdxSelecionado(i => Math.min(i + 1, resultados.length - 1));
-                } else if (e.key === "ArrowUp") {
-                  e.preventDefault();
-                  setIdxSelecionado(i => Math.max(i - 1, 0));
-                } else if (e.key === "Enter" && resultados.length > 0) {
-                  const prod = idxSelecionado >= 0 ? resultados[idxSelecionado] : resultados[0];
-                  addMutation.mutate(prod);
-                } else if (e.key === "Escape") {
-                  setMostrarBusca(false);
-                }
-              }}
+              onKeyDown={handleKeyDown}
               placeholder="Referência ou nome do produto..."
               className="w-full pl-9 pr-4 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
@@ -336,7 +309,11 @@ export default function GondolaLoja() {
               {resultados.map((prod, idx) => (
                 <div
                   key={prod.id_produto}
-                  className={`flex items-center justify-between px-3 py-2.5 cursor-pointer transition-colors ${idx === idxSelecionado ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-muted/50"}`}
+                  className={`flex items-center justify-between px-3 py-2.5 cursor-pointer transition-colors ${
+                    idx === idxSelecionado
+                      ? "bg-primary/10 border-l-2 border-primary"
+                      : "hover:bg-muted/50"
+                  }`}
                   onClick={() => addMutation.mutate(prod)}
                 >
                   <div className="min-w-0">
@@ -381,10 +358,7 @@ export default function GondolaLoja() {
                 {gondola.map(item => {
                   const div = divergencia(item);
                   return (
-                    <tr
-                      key={item.id}
-                      className={`border-b border-border/50 hover:bg-muted/30 ${div ? "bg-red-50/40 dark:bg-red-950/10" : ""}`}
-                    >
+                    <tr key={item.id} className={`border-b border-border/50 hover:bg-muted/30 ${div ? "bg-red-50/40 dark:bg-red-950/10" : ""}`}>
                       <td className="py-2.5 px-3 text-xs font-mono text-muted-foreground">{item.referencia}</td>
                       <td className="py-2.5 px-3 text-xs font-medium max-w-[200px]">
                         <span className="line-clamp-2">{item.nome}</span>
@@ -415,30 +389,18 @@ export default function GondolaLoja() {
                       </td>
                       <td className="py-2.5 px-3">
                         <div className="flex items-center justify-center gap-1">
-                          {/* Imprimir avulso */}
-                          <button
-                            title="Imprimir etiqueta"
-                            onClick={() => handleImprimir([item])}
-                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                          >
+                          <button title="Imprimir etiqueta" onClick={() => handleImprimir([item])}
+                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                             <Printer className="h-3.5 w-3.5" />
                           </button>
-                          {/* Confirmar atualização sem imprimir */}
                           {div && (
-                            <button
-                              title="Confirmar atualização de preço"
-                              onClick={() => atualizarMutation.mutate(item)}
-                              className="p-1.5 rounded hover:bg-muted text-amber-600 hover:text-amber-700 transition-colors"
-                            >
+                            <button title="Confirmar atualização de preço" onClick={() => atualizarMutation.mutate(item)}
+                              className="p-1.5 rounded hover:bg-muted text-amber-600 hover:text-amber-700 transition-colors">
                               <RefreshCw className="h-3.5 w-3.5" />
                             </button>
                           )}
-                          {/* Excluir */}
-                          <button
-                            title="Remover da gôndola"
-                            onClick={() => removeMutation.mutate(item.id)}
-                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
-                          >
+                          <button title="Remover da gôndola" onClick={() => removeMutation.mutate(item.id)}
+                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
@@ -454,13 +416,3 @@ export default function GondolaLoja() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
