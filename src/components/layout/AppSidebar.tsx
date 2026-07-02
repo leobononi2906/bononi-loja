@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Users, Wrench, ParkingCircle, Scissors, Boxes, Settings2, X } from "lucide-react";
+import { LayoutDashboard, Users, Wrench, ParkingCircle, Scissors, Boxes, Settings2, Tag, X } from "lucide-react";
 
 const groups = [
   {
@@ -16,6 +16,12 @@ const groups = [
       { to: "/servicos/patio", label: "Pátio", icon: ParkingCircle },
       { to: "/servicos/tapecaria", label: "Tapeçaria", icon: Scissors },
       { to: "/servicos/config-colaboradores", label: "Config. Colaboradores", icon: Settings2 },
+    ],
+  },
+  {
+    label: "Loja",
+    items: [
+      { to: "/gondola", label: "Gôndola", icon: Tag, end: true },
     ],
   },
 ];
@@ -43,7 +49,6 @@ export function AppSidebar({ onClose }: Props) {
             </div>
           </div>
         </div>
-        {/* Botão fechar no mobile */}
         {onClose && (
           <button onClick={onClose} className="lg:hidden text-white/60 hover:text-white p-1">
             <X className="h-4 w-4" />
