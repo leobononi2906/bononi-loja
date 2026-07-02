@@ -119,12 +119,11 @@ function PainelBusca({
 
   function adicionar(prod: ProdutoBusca) {
     addMutation.mutate(prod);
-    setBusca("");
-    setResultados([]);
+    // Não limpa o campo nem os resultados — lista fica visível
+    // O item adicionado aparece com badge "✓ Na gôndola"
     setIdx(-1);
     setUltimoAdicionado(prod.referencia);
     setTimeout(() => setUltimoAdicionado(null), 2000);
-    // Foco imediato — não depende do ciclo de render do pai
     inputRef.current?.focus();
   }
 
@@ -402,4 +401,5 @@ export default function GondolaLoja() {
     </div>
   );
 }
+
 
