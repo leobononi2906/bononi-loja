@@ -204,6 +204,30 @@ function PainelBusca({
 export default function GondolaLoja() {
   const qc = useQueryClient();
   const [painelAberto, setPainelAberto] = useState(false);
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+
+  function toggleItem(id: number) {
+    setSelecionados(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleTodos() {
+    if (todosSelecionados) {
+      setSelecionados(new Set());
+    } else {
+      setSelecionados(new Set(todosIds));
+    }
+  }
+
+  async function handleImprimirSelecionados() {
+    const itens = gondola.filter(i => selecionados.has(i.id));
+    if (itens.length === 0) return;
+    await handleImprimir(itens);
+    setSelecionados(new Set());
+  }
 
   const { data: gondola = [], isLoading } = useQuery({
     queryKey: ["gondola"],
@@ -223,6 +247,10 @@ export default function GondolaLoja() {
   });
 
   // Set de referências já na gôndola — para mostrar badge na busca
+  const todosIds = gondola.map(i => i.id);
+  const todosSelecionados = todosIds.length > 0 && todosIds.every(id => selecionados.has(id));
+  const algunsSelecionados = selecionados.size > 0 && !todosSelecionados;
+
   const refsNaGondola = new Set(gondola.map(i => i.referencia));
 
   const divergentes = gondola.filter(divergencia);
@@ -299,6 +327,12 @@ export default function GondolaLoja() {
             <Printer className="h-4 w-4" /> Imprimir divergentes ({divergentes.length})
           </button>
         )}
+        {selecionados.size > 0 && (
+          <button onClick={handleImprimirSelecionados}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors">
+            <Printer className="h-4 w-4" /> Imprimir selecionados ({selecionados.size})
+          </button>
+        )}
       </div>
 
       {/* Painel de busca — sempre montado quando aberto, nunca desmonta sozinho */}
@@ -333,6 +367,15 @@ export default function GondolaLoja() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/30">
+                  <th className="py-2.5 px-3 w-8">
+                    <input
+                      type="checkbox"
+                      checked={todosSelecionados}
+                      ref={el => { if (el) el.indeterminate = algunsSelecionados; }}
+                      onChange={toggleTodos}
+                      className="cursor-pointer"
+                    />
+                  </th>
                   <th className="py-2.5 px-3 text-left text-xs font-semibold text-muted-foreground">Referência</th>
                   <th className="py-2.5 px-3 text-left text-xs font-semibold text-muted-foreground">Produto</th>
                   <th className="py-2.5 px-3 text-right text-xs font-semibold text-muted-foreground">Etiqueta</th>
@@ -345,7 +388,11 @@ export default function GondolaLoja() {
                 {gondola.map(item => {
                   const div = divergencia(item);
                   return (
-                    <tr key={item.id} className={`border-b border-border/50 hover:bg-muted/30 ${div ? "bg-red-50/40 dark:bg-red-950/10" : ""}`}>
+                    <tr key={item.id} className={`border-b border-border/50 hover:bg-muted/30 cursor-pointer ${div ? "bg-red-50/40 dark:bg-red-950/10" : ""} ${selecionados.has(item.id) ? "bg-blue-50/50 dark:bg-blue-950/10" : ""}`}
+                      onClick={() => toggleItem(item.id)}>
+                      <td className="py-2.5 px-3" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={selecionados.has(item.id)} onChange={() => toggleItem(item.id)} className="cursor-pointer" />
+                      </td>
                       <td className="py-2.5 px-3 text-xs font-mono text-muted-foreground">{item.referencia}</td>
                       <td className="py-2.5 px-3 text-xs font-medium max-w-[200px]"><span className="line-clamp-2">{item.nome}</span></td>
                       <td className="py-2.5 px-3 text-xs text-right font-mono">
@@ -401,5 +448,6 @@ export default function GondolaLoja() {
     </div>
   );
 }
+
 
 
