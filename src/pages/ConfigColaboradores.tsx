@@ -140,6 +140,8 @@ export default function ConfigColaboradores() {
   const colabs = colabsAtivos ?? [];
   const patio     = colabs.filter(c => getSetor(c.id_colaborador) === "PATIO");
   const tapecaria = colabs.filter(c => getSetor(c.id_colaborador) === "TAPECARIA");
+  // Colaboradores com serviço/OP mas SEM setor cadastrado — independente de departamento
+  const semSetor  = colabs.filter(c => !getSetor(c.id_colaborador));
   const hasPending = Object.keys(pendingChanges).length > 0;
 
   return (
@@ -236,7 +238,48 @@ export default function ConfigColaboradores() {
           </div>
         </div>
       )}
+
+      {/* COLABORADORES SEM SETOR — têm serviço mas não estão cadastrados */}
+      {semSetor.length > 0 && (
+        <div className="chart-container border-l-4 border-l-amber-400">
+          <h3 className="text-sm font-semibold font-display mb-1 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+            Sem setor cadastrado
+            <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700">{semSetor.length}</Badge>
+          </h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            Colaboradores com movimento no período mas sem setor definido. Clique para cadastrar.
+          </p>
+          <div className="space-y-0.5">
+            {semSetor.map(c => (
+              <div
+                key={c.id_colaborador}
+                className="flex items-center justify-between py-2 px-2 rounded-md bg-amber-50/50 dark:bg-amber-950/10"
+              >
+                <span className="text-xs font-medium">{c.nome_colaborador}</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => {
+                      // Define como PATIO por padrão — operador pode mudar depois
+                      const id = c.id_colaborador;
+                      const curr = pendingChanges[id] ?? getSetor(id);
+                      const next = curr === "PATIO" ? "TAPECARIA" : "PATIO";
+                      setPendingChanges(prev => ({ ...prev, [id]: next as "PATIO" | "TAPECARIA" }));
+                    }}
+                    className="text-[10px] font-medium px-2 py-0.5 rounded border border-amber-300 bg-white hover:bg-amber-50 text-amber-700 transition-colors"
+                  >
+                    {pendingChanges[c.id_colaborador]
+                      ? `→ ${pendingChanges[c.id_colaborador]}`
+                      : "Definir setor"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
