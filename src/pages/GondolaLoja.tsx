@@ -100,11 +100,21 @@ function PainelBusca({
     if (termo.length < 2) { setResultados([]); setIdx(-1); return; }
     setBuscando(true);
     try {
-      const q = supabase.from("bling_produtos_sync").select("id_produto,referencia,nome,preco").range(0, 19);
+      const q = supabase
+        .from("vw_fb_produtos_compras")
+        .select("id_produto,referencia,nome,preco_venda,ipi_saida")
+        .eq("id_empresa", 2)
+        .eq("fora_linha", "0")
+        .range(0, 19);
       if (/^\d+$/.test(termo)) q.ilike("referencia", `%${termo}%`);
       else q.ilike("nome", `%${termo}%`);
       const { data } = await q;
-      setResultados((data ?? []).map(d => ({ ...d, preco_venda: Number(d.preco) })));
+      setResultados((data ?? []).map(d => {
+        const base = Number(d.preco_venda) || 0;
+        const ipi  = Number(d.ipi_saida)  || 0;
+        const preco_venda = ipi > 0 ? Math.round(base * (1 + ipi / 100) * 100) / 100 : base;
+        return { ...d, id_produto: d.id_produto, referencia: d.referencia, nome: d.nome, preco_venda };
+      }));
       setIdx(-1);
     } finally {
       setBuscando(false);
@@ -237,10 +247,18 @@ export default function GondolaLoja() {
       if (error) throw error;
       if (!items || items.length === 0) return [];
       const refs = items.map(i => i.referencia);
-      const { data: precos } = await supabase.from("bling_produtos_sync")
-        .select("referencia,preco").in("referencia", refs).range(0, 9999);
+      const { data: precos } = await supabase
+        .from("vw_fb_produtos_compras")
+        .select("referencia,preco_venda,ipi_saida")
+        .eq("id_empresa", 2)
+        .in("referencia", refs)
+        .range(0, 9999);
       const mapa: Record<string, number> = {};
-      (precos ?? []).forEach(p => { mapa[p.referencia] = Number(p.preco); });
+      (precos ?? []).forEach(p => {
+        const base = Number(p.preco_venda) || 0;
+        const ipi  = Number(p.ipi_saida)  || 0;
+        mapa[p.referencia] = ipi > 0 ? Math.round(base * (1 + ipi / 100) * 100) / 100 : base;
+      });
       return items.map(i => ({ ...i, preco_atual: mapa[i.referencia] ?? null })) as GondolaItem[];
     },
     refetchInterval: 60_000,
@@ -448,6 +466,7 @@ export default function GondolaLoja() {
     </div>
   );
 }
+
 
 
 
