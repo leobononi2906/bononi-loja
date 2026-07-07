@@ -104,7 +104,6 @@ function PainelBusca({
         .from("vw_fb_produtos_compras")
         .select("id_produto,referencia,nome,preco_venda,ipi_saida")
         .eq("id_empresa", 2)
-        .neq("fora_linha", "S")
         .range(0, 19);
       if (/^\d+$/.test(termo)) q.ilike("referencia", `%${termo}%`);
       else q.ilike("nome", `%${termo}%`);
@@ -251,7 +250,6 @@ export default function GondolaLoja() {
         .from("vw_fb_produtos_compras")
         .select("referencia,preco_venda,ipi_saida")
         .eq("id_empresa", 2)
-        .neq("fora_linha", "S")
         .in("referencia", refs)
         .range(0, 9999);
       const mapa: Record<string, number> = {};
@@ -467,6 +465,7 @@ export default function GondolaLoja() {
     </div>
   );
 }
+
 
 
 
