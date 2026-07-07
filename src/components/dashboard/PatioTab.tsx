@@ -74,7 +74,7 @@ export function PatioTab({ filters }: Props) {
   const patioColabs = usePatioColabs();
   const patioColabIds = patioColabs.data ?? new Set();
 
-  const produtividade = useViewData("vw_patio_produtividade_v2", filters);
+  const produtividade = useViewData("geral_patio_horas_reais", filters);
   const patioOp       = useViewData("vw_tap_prod_v3", filters, 5000, { skipTipoSaida: true, columns: "id_colaborador,nome_colaborador,tipo_lancamento,produto,grupo,subgrupo,nome_servico,grupo_serv,horas_colab,data_apontamento,produto_rateado,servico_rateado" });
   const fatCol        = useViewData("vw_patio_fat_col_v2", filters);
   const produzido     = useViewData("vw_patio_produzido_v2", filters);
@@ -82,7 +82,7 @@ export function PatioTab({ filters }: Props) {
   const servicosFat   = useViewData("vw_os_servicos_faturados", filters);
 
   // Loga erros de fetch automaticamente
-  if (produtividade.error) logErro("vw_patio_produtividade_v2", "Erro fetch", (produtividade.error as Error).message);
+  if (produtividade.error) logErro("geral_patio_horas_reais", "Erro fetch", (produtividade.error as Error).message);
   if (fatCol.error)        logErro("vw_patio_fat_col_v2", "Erro fetch", (fatCol.error as Error).message);
   if (patioOp.error)       logErro("vw_tap_prod_v3", "Erro fetch (patio OP)", (patioOp.error as Error).message);
 
@@ -90,28 +90,31 @@ export function PatioTab({ filters }: Props) {
     (patioColabIds.size === 0 || patioColabIds.has(Number(r.id_colaborador))) &&
     String(r.tipo_lancamento || "").toUpperCase() === "PRODUTO"
   );
+  // geral_patio_horas_reais já entrega 1 linha por colaborador/dia
+  // com horas sem sobreposição de intervalos e limitadas a 8.8h
   const prodDataRaw = (produtividade.data ?? []).filter(r =>
-    (Number(r.horas_trabalhadas) || 0) > 0 &&
+    (Number(r.horas_reais) || 0) > 0 &&
     (patioColabIds.size === 0 || patioColabIds.has(Number(r.id_colaborador)))
   );
   const fatData       = (fatCol.data ?? []).filter(r => patioColabIds.size === 0 || patioColabIds.has(Number(r.id_colaborador)));
   const produzidoData = produzido.data ?? [];
   const diarioData    = diario.data ?? [];
 
-  // ── Deduplica: 1 linha por colaborador/dia (8.8h disponível por dia, não por OS)
+  // Monta dedupMap direto da nova view — 1 linha por colab/dia, sem sobreposição
   const dedupMap: Record<string, { nome: string; id: number; trab: number; disp: number; extrapolou: boolean }> = {};
   prodDataRaw.forEach(r => {
     const key = `${r.id_colaborador}__${String(r.data_apontamento).slice(0, 10)}`;
-    if (!dedupMap[key]) {
-      dedupMap[key] = { nome: String(r.nome_colaborador || "-"), id: Number(r.id_colaborador), trab: 0, disp: 8.8, extrapolou: false };
-    }
-    dedupMap[key].trab += Number(r.horas_trabalhadas) || 0;
+    const horasReais    = Number(r.horas_reais) || 0;
+    const horasLimitada = Number(r.horas_reais_limitadas) || 0;
+    dedupMap[key] = {
+      nome:      String(r.nome_colaborador || "-"),
+      id:        Number(r.id_colaborador),
+      trab:      horasLimitada,
+      disp:      8.8,
+      extrapolou: horasReais > 8.8,
+    };
   });
-  const prodData = Object.values(dedupMap).map(v => ({
-    ...v,
-    extrapolou: v.trab > 8.8,
-    trab: Math.min(v.trab, 8.8),
-  }));
+  const prodData = Object.values(dedupMap);
 
   const horasDisp      = prodData.reduce((s, r) => s + r.disp, 0);
   const horasTrab      = prodData.reduce((s, r) => s + r.trab, 0);
@@ -125,8 +128,8 @@ export function PatioTab({ filters }: Props) {
     const d = String(r.data_apontamento || "").slice(0, 10);
     if (!d) return;
     if (!dailyMap[d]) dailyMap[d] = { trab: 0, disp: 0 };
-    dailyMap[d].trab += Number(r.horas_trabalhadas) || 0;
-    dailyMap[d].disp += Number(r.horas_disponiveis) || 0;
+    dailyMap[d].trab += Number(r.horas_reais_limitadas) || 0;
+    dailyMap[d].disp += Number(r.horas_disponiveis) || 8.8;
   });
   const dailyChart = Object.entries(dailyMap)
     .map(([rawDate, v]) => ({
@@ -403,6 +406,7 @@ export function PatioTab({ filters }: Props) {
     </div>
   );
 }
+
 
 
 
