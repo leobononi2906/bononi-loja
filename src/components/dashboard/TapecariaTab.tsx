@@ -52,6 +52,7 @@ export function TapecariaTab({ filters }: Props) {
 
   // ── Data sources — usa vw_tap_prod_v3 (sem filtro departamento, bug de duplicação corrigido) ──
   const tapProd = useViewData("vw_tap_prod_v3", filters, 5000, {
+    skipTipoSaida: true,
     columns: "id_colaborador,nome_colaborador,produto_rateado,servico_rateado,tipo_lancamento,produto,grupo,subgrupo,nome_servico,grupo_serv,horas_colab,data_apontamento,id_produto",
   });
   const itensVendidos = useViewData("vw_comercial_itens_faturados", filters, 5000, { skipTipoSaida: true });
@@ -302,4 +303,5 @@ export function TapecariaTab({ filters }: Props) {
     </div>
   );
 }
+
 
