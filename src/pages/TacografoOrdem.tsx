@@ -341,7 +341,13 @@ export default function TacografoOrdem() {
           mime: a!.mime_type, nome: a!.nome_arquivo,
         }));
       const bytes = await gerarDossiePdf(itens);
-      abrirPdf(bytes, `Dossie_OS_${ordem.numero_os}_${ordem.veiculo_placa || ""}.pdf`);
+      const now = new Date();
+      const dd = String(now.getDate()).padStart(2, "0");
+      const mm = String(now.getMonth() + 1).padStart(2, "0");
+      const yy = String(now.getFullYear()).slice(-2);
+      const placa = (ordem.veiculo_placa || "").replace(/[^A-Za-z0-9]/g, "");
+      const nomeDossie = `${dd}${mm}${yy}_OS${ordem.numero_os}_${placa}.pdf`;
+      abrirPdf(bytes, nomeDossie);
       tacoLog("ACAO", "GERAR_DOSSIE", {
         entidade: "taco_ordem", id_entidade: ordem.id,
         nome_entidade: `OS ${ordem.numero_os}`, contexto: { docs: itens.length },
