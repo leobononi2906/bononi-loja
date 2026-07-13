@@ -61,15 +61,16 @@ export interface SlotDef {
 export const ANEXO_TIPOS: SlotDef[] = [
   { tipo: "FOTO_TACOGRAFO", label: "Foto do tacógrafo", origem: "SERVICO" },
   { tipo: "FOTO_TACOGRAFO_2", label: "Foto do tacógrafo — foto 2", origem: "SERVICO", opcional: true },
+  { tipo: "CRLV", label: "CRLV do veículo", origem: "RECEPCAO", aceitaPdf: true },
   { tipo: "DISCO_1", label: "Disco do tacógrafo — foto 1", origem: "SERVICO" },
   { tipo: "DISCO_2", label: "Disco do tacógrafo — foto 2", origem: "SERVICO" },
-  { tipo: "CRLV", label: "CRLV do veículo", origem: "RECEPCAO", aceitaPdf: true },
   { tipo: "COMPROVANTE_ENDERECO", label: "Comp. Residência / Cartão CNPJ", origem: "RECEPCAO", aceitaPdf: true },
 ];
 
 // Ordem das páginas no dossiê final
 export const DOSSIE_ORDEM: TacoAnexoTipo[] = [
   "FOTO_TACOGRAFO",
+  "FOTO_TACOGRAFO_2",
   "CRLV",
   "DISCO_1",
   "DISCO_2",
