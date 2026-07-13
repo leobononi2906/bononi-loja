@@ -285,19 +285,21 @@ export async function gerarDossiePdf(itens: DossieItem[]): Promise<Uint8Array> {
 }
 
 // ─── ABRIR / BAIXAR PDF ───────────────────────────────────────────────────
+// Usa download direto via <a> para evitar bloqueio de popup em mobile/Safari
 
 export function abrirPdf(bytes: Uint8Array, nomeArquivo: string) {
-  const blob = new Blob([bytes as unknown as BlobPart], { type: "application/pdf" });
+  const blob = new Blob([bytes], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
-  const win = window.open(url, "_blank");
-  if (!win) {
-    // popup bloqueado → força download
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = nomeArquivo;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }
+
+  // Tenta abrir em nova aba primeiro (funciona em desktop)
+  // Se falhar (popup bloqueado em mobile/Safari), força download
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nomeArquivo;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

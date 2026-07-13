@@ -76,6 +76,46 @@ export const DOSSIE_ORDEM: TacoAnexoTipo[] = [
   "CARTAO_CNPJ",
 ];
 
+// ─── STATUS VISUAL DERIVADO ──────────────────────────────────────────────
+// Status do banco (ABERTA/CONCLUIDA) + contagem de docs = status visual
+export type StatusVisual = "ABERTA" | "PEND_DOC" | "DOCS_OK" | "CONCLUIDA";
+
+export interface StatusVisualInfo {
+  status: StatusVisual;
+  label: string;
+  badgeClass: string;
+}
+
+const TOTAL_DOCS = ANEXO_TIPOS.length; // 6
+
+export function derivarStatusVisual(statusBanco: TacoStatus, qtdDocs: number): StatusVisualInfo {
+  if (statusBanco === "CONCLUIDA") {
+    return { status: "CONCLUIDA", label: "Concluída", badgeClass: "b-badge-ok" };
+  }
+  if (qtdDocs >= TOTAL_DOCS) {
+    return { status: "DOCS_OK", label: "Docs completos", badgeClass: "b-badge-ok" };
+  }
+  if (qtdDocs > 0) {
+    return { status: "PEND_DOC", label: "Pend. doc", badgeClass: "b-badge-critico" };
+  }
+  return { status: "ABERTA", label: "Aberta", badgeClass: "b-badge-info" };
+}
+
+// ─── PRÓXIMO NÚMERO DE OS (sequencial) ───────────────────────────────────
+export async function proximoNumeroOS(): Promise<string> {
+  const { data } = await db
+    .from("taco_ordens")
+    .select("numero_os")
+    .order("id", { ascending: false })
+    .limit(100);
+  let max = 0;
+  (data ?? []).forEach((r: { numero_os: string }) => {
+    const n = parseInt(r.numero_os, 10);
+    if (!isNaN(n) && n > max) max = n;
+  });
+  return String(max + 1);
+}
+
 // ─── LOG PADRÃO BONONI (taco_logs) ───────────────────────────────────────
 export async function tacoLog(tipo: string, acao: string, dados: any = {}) {
   try {

@@ -6,15 +6,20 @@ import { Plus, Search, AlertCircle, Gauge, FileCheck2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { db, fmtData, ANEXO_TIPOS, TacoOrdem, TacoStatus } from "@/lib/taco";
+import {
+  db, fmtData, ANEXO_TIPOS, derivarStatusVisual,
+  TacoOrdem, StatusVisual,
+} from "@/lib/taco";
 
 type OrdemComAnexos = TacoOrdem & { taco_anexos: { tipo: string }[] };
 
 const TOTAL_DOCS = ANEXO_TIPOS.length;
 
+type FiltroStatus = StatusVisual | "TODAS";
+
 export default function TacografoLista() {
   const navigate = useNavigate();
-  const [statusFiltro, setStatusFiltro] = useState<TacoStatus | "TODAS">("ABERTA");
+  const [statusFiltro, setStatusFiltro] = useState<FiltroStatus>("TODAS");
   const [busca, setBusca] = useState("");
 
   const { data, isLoading, error } = useQuery({
@@ -31,7 +36,9 @@ export default function TacografoLista() {
   });
 
   const lista = (Array.isArray(data) ? data : []).filter((o) => {
-    if (statusFiltro !== "TODAS" && o.status !== statusFiltro) return false;
+    const tipos = new Set((o.taco_anexos ?? []).map((a) => a.tipo));
+    const sv = derivarStatusVisual(o.status, tipos.size);
+    if (statusFiltro !== "TODAS" && sv.status !== statusFiltro) return false;
     const q = busca.trim().toLowerCase();
     if (!q) return true;
     return (
@@ -41,7 +48,7 @@ export default function TacografoLista() {
     );
   });
 
-  const chip = (v: TacoStatus | "TODAS", label: string) => (
+  const chip = (v: FiltroStatus, label: string) => (
     <button
       key={v}
       onClick={() => setStatusFiltro(v)}
@@ -76,9 +83,11 @@ export default function TacografoLista() {
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">
-        {chip("ABERTA", "Abertas")}
-        {chip("CONCLUIDA", "Concluídas")}
         {chip("TODAS", "Todas")}
+        {chip("ABERTA", "Abertas")}
+        {chip("PEND_DOC", "Pend. doc")}
+        {chip("DOCS_OK", "Docs completos")}
+        {chip("CONCLUIDA", "Concluídas")}
         <div className="relative flex-1 min-w-[200px] max-w-[340px] ml-auto">
           <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--text-muted))]" />
           <Input
@@ -132,7 +141,7 @@ export default function TacografoLista() {
           {lista.map((o) => {
             const tipos = new Set((o.taco_anexos ?? []).map((a) => a.tipo));
             const docs = tipos.size;
-            const completo = docs >= TOTAL_DOCS;
+            const sv = derivarStatusVisual(o.status, docs);
             return (
               <button
                 key={o.id}
@@ -146,8 +155,8 @@ export default function TacografoLista() {
                   >
                     OS {o.numero_os}
                   </span>
-                  <span className={`b-badge ${o.status === "ABERTA" ? "b-badge-info" : "b-badge-ok"}`}>
-                    {o.status === "ABERTA" ? "Aberta" : "Concluída"}
+                  <span className={`b-badge ${sv.badgeClass}`}>
+                    {sv.label}
                   </span>
                 </div>
                 <p className="text-[14px] font-semibold text-[hsl(var(--foreground))] truncate">
@@ -157,7 +166,7 @@ export default function TacografoLista() {
                   {[o.veiculo_placa, o.veiculo_marca_modelo].filter(Boolean).join(" · ") || "Veículo não informado"}
                 </p>
                 <div className="flex items-center justify-between mt-3">
-                  <span className={`b-badge ${completo ? "b-badge-ok" : "b-badge-critico"}`}>
+                  <span className={`b-badge ${docs >= TOTAL_DOCS ? "b-badge-ok" : docs > 0 ? "b-badge-critico" : "b-badge-muted"}`}>
                     {docs}/{TOTAL_DOCS} docs
                   </span>
                   <span className="text-[11px] text-[hsl(var(--text-muted))]">{fmtData(o.criado_em)}</span>

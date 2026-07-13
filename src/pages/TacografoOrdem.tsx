@@ -15,15 +15,16 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  db, tacoLog, comprimirImagem, anexoUrl, fmtData,
-  ANEXO_TIPOS, DOSSIE_ORDEM, TacoOrdem, TacoAnexo, TacoAnexoTipo,
+  db, tacoLog, comprimirImagem, anexoUrl, fmtData, proximoNumeroOS,
+  derivarStatusVisual, ANEXO_TIPOS, DOSSIE_ORDEM,
+  TacoOrdem, TacoAnexo, TacoAnexoTipo,
 } from "@/lib/taco";
 import { gerarDeclaracaoPdf, gerarDossiePdf, abrirPdf, DeclaracaoDados } from "@/lib/taco-pdf";
 
 type OrdemFull = TacoOrdem & { taco_anexos: TacoAnexo[] };
 
 const FORM_VAZIO = {
-  numero_os: "", cliente_nome: "", cliente_codigo_erp: "" as string | number,
+  cliente_nome: "", cliente_codigo_erp: "" as string | number,
   cliente_cpf: "", cliente_rg: "", cliente_cnpj: "",
   cliente_endereco: "", cliente_numero: "", cliente_bairro: "", cliente_cep: "",
   cliente_cidade: "", cliente_uf: "", cliente_telefone: "", cliente_email: "",
@@ -81,7 +82,6 @@ export default function TacografoOrdem() {
   if (ordem && !formCarregado.current) {
     formCarregado.current = true;
     setForm({
-      numero_os: ordem.numero_os ?? "",
       cliente_nome: ordem.cliente_nome ?? "",
       cliente_codigo_erp: ordem.cliente_codigo_erp ?? "",
       cliente_cpf: ordem.cliente_cpf ?? "",
@@ -90,9 +90,9 @@ export default function TacografoOrdem() {
       cliente_endereco: ordem.cliente_endereco ?? "",
       cliente_numero: ordem.cliente_numero ?? "",
       cliente_bairro: ordem.cliente_bairro ?? "",
-      cliente_cep: ordem.cliente_cep ?? "",
       cliente_cidade: ordem.cliente_cidade ?? "",
       cliente_uf: ordem.cliente_uf ?? "",
+      cliente_cep: ordem.cliente_cep ?? "",
       cliente_telefone: ordem.cliente_telefone ?? "",
       cliente_email: ordem.cliente_email ?? "",
       veiculo_marca_modelo: ordem.veiculo_marca_modelo ?? "",
@@ -102,6 +102,12 @@ export default function TacografoOrdem() {
   }
 
   const anexos: TacoAnexo[] = Array.isArray(ordem?.taco_anexos) ? ordem!.taco_anexos : [];
+  const docsEnviados = new Set(anexos.map((a) => a.tipo)).size;
+
+  // Status visual derivado
+  const statusVisual = ordem
+    ? derivarStatusVisual(ordem.status, docsEnviados)
+    : null;
 
   // ─── Busca cliente no ERP ───
   const { data: clientesERP, isFetching: buscandoCliente } = useQuery({
@@ -145,7 +151,6 @@ export default function TacografoOrdem() {
 
   // ─── Salvar (criar ou editar) ───
   const salvar = async () => {
-    if (!form.numero_os.trim()) return toast.error("Informe o número da OS.");
     if (!form.cliente_nome.trim()) return toast.error("Informe o nome do cliente.");
     setSalvando(true);
     const payload = {
@@ -155,14 +160,20 @@ export default function TacografoOrdem() {
     };
     try {
       if (isNova) {
-        const { data, error } = await db.from("taco_ordens").insert(payload).select("id").single();
+        // Gera número automático sequencial
+        const numero_os = await proximoNumeroOS();
+        const { data, error } = await db
+          .from("taco_ordens")
+          .insert({ ...payload, numero_os })
+          .select("id")
+          .single();
         if (error) throw error;
         tacoLog("ACAO", "CRIAR_OS", {
           entidade: "taco_ordem", id_entidade: data.id,
-          nome_entidade: `OS ${form.numero_os} — ${form.cliente_nome}`,
-          depois: payload,
+          nome_entidade: `OS ${numero_os} — ${form.cliente_nome}`,
+          depois: { ...payload, numero_os },
         });
-        toast.success("Ordem de serviço criada.");
+        toast.success(`Ordem de serviço nº ${numero_os} criada.`);
         qc.invalidateQueries({ queryKey: ["taco-ordens"] });
         navigate(`/tacografo/${data.id}`, { replace: true });
       } else {
@@ -170,7 +181,7 @@ export default function TacografoOrdem() {
         if (error) throw error;
         tacoLog("ACAO", "EDITAR_OS", {
           entidade: "taco_ordem", id_entidade: id,
-          nome_entidade: `OS ${form.numero_os}`, depois: payload,
+          nome_entidade: `OS ${ordem?.numero_os}`, depois: payload,
         });
         toast.success("Dados atualizados.");
         setEditando(false);
@@ -362,7 +373,6 @@ export default function TacografoOrdem() {
   }
 
   const mostrarForm = isNova || editando;
-  const docsEnviados = new Set(anexos.map((a) => a.tipo)).size;
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-5xl">
@@ -384,9 +394,9 @@ export default function TacografoOrdem() {
             </p>
           )}
         </div>
-        {!isNova && (
-          <span className={`b-badge ${ordem?.status === "ABERTA" ? "b-badge-info" : "b-badge-ok"}`}>
-            {ordem?.status === "ABERTA" ? "Aberta" : "Concluída"}
+        {!isNova && statusVisual && (
+          <span className={`b-badge ${statusVisual.badgeClass}`}>
+            {statusVisual.label}
           </span>
         )}
       </div>
@@ -464,9 +474,8 @@ export default function TacografoOrdem() {
             )}
           </div>
 
-          {/* Dados da OS + cliente */}
+          {/* Dados da OS + cliente — sem campo numero_os (gerado automaticamente) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <Campo label="Número da OS *"><Input value={form.numero_os} onChange={set("numero_os")} /></Campo>
             <Campo label="Nome do cliente *" className="lg:col-span-2"><Input value={form.cliente_nome} onChange={set("cliente_nome")} /></Campo>
             <Campo label="Código ERP"><Input value={String(form.cliente_codigo_erp)} onChange={set("cliente_codigo_erp")} inputMode="numeric" /></Campo>
             <Campo label="CPF"><Input value={form.cliente_cpf} onChange={set("cliente_cpf")} /></Campo>
