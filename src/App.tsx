@@ -11,6 +11,8 @@ import ServicosPatio from "./pages/ServicosPatio";
 import ServicosTapecaria from "./pages/ServicosTapecaria";
 import ConfigColaboradores from "./pages/ConfigColaboradores";
 import GondolaLoja from "./pages/GondolaLoja";
+import TacografoLista from "./pages/TacografoLista";
+import TacografoOrdem from "./pages/TacografoOrdem";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,6 +33,9 @@ const App = () => (
             <Route path="/servicos/tapecaria" element={<ServicosTapecaria />} />
             <Route path="/servicos/config-colaboradores" element={<ConfigColaboradores />} />
             <Route path="/gondola" element={<GondolaLoja />} />
+            <Route path="/tacografo" element={<TacografoLista />} />
+            <Route path="/tacografo/nova" element={<TacografoOrdem />} />
+            <Route path="/tacografo/:id" element={<TacografoOrdem />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
