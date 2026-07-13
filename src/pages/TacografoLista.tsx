@@ -8,18 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   db, fmtData, ANEXO_TIPOS, derivarStatusVisual,
-  TacoOrdem, StatusVisual,
+  TacoOrdem,
 } from "@/lib/taco";
 
 type OrdemComAnexos = TacoOrdem & { taco_anexos: { tipo: string }[] };
 
 const TOTAL_DOCS = ANEXO_TIPOS.length;
 
-type FiltroStatus = StatusVisual | "TODAS";
-
 export default function TacografoLista() {
   const navigate = useNavigate();
-  const [statusFiltro, setStatusFiltro] = useState<FiltroStatus>("TODAS");
+  const [aba, setAba] = useState<"andamento" | "concluidas">("andamento");
   const [busca, setBusca] = useState("");
 
   const { data, isLoading, error } = useQuery({
@@ -35,10 +33,11 @@ export default function TacografoLista() {
     },
   });
 
-  const lista = (Array.isArray(data) ? data : []).filter((o) => {
-    const tipos = new Set((o.taco_anexos ?? []).map((a) => a.tipo));
-    const sv = derivarStatusVisual(o.status, tipos.size);
-    if (statusFiltro !== "TODAS" && sv.status !== statusFiltro) return false;
+  const todas = Array.isArray(data) ? data : [];
+
+  const lista = todas.filter((o) => {
+    if (aba === "concluidas" && o.status !== "CONCLUIDA") return false;
+    if (aba === "andamento" && o.status === "CONCLUIDA") return false;
     const q = busca.trim().toLowerCase();
     if (!q) return true;
     return (
@@ -48,20 +47,8 @@ export default function TacografoLista() {
     );
   });
 
-  const chip = (v: FiltroStatus, label: string) => (
-    <button
-      key={v}
-      onClick={() => setStatusFiltro(v)}
-      className={`px-3 py-1.5 rounded-full text-[12px] font-semibold transition-colors ${
-        statusFiltro === v
-          ? "text-white"
-          : "text-[hsl(var(--muted-foreground))] bg-[hsl(var(--surface2))]"
-      }`}
-      style={statusFiltro === v ? { background: "hsl(var(--primary))" } : undefined}
-    >
-      {label}
-    </button>
-  );
+  const qtdAndamento = todas.filter((o) => o.status !== "CONCLUIDA").length;
+  const qtdConcluidas = todas.filter((o) => o.status === "CONCLUIDA").length;
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -81,13 +68,30 @@ export default function TacografoLista() {
         </Button>
       </div>
 
-      {/* Filtros */}
+      {/* Abas + busca */}
       <div className="flex flex-wrap items-center gap-2">
-        {chip("TODAS", "Todas")}
-        {chip("ABERTA", "Abertas")}
-        {chip("PEND_DOC", "Pend. doc")}
-        {chip("DOCS_OK", "Docs completos")}
-        {chip("CONCLUIDA", "Concluídas")}
+        <div className="flex rounded-lg overflow-hidden border border-[hsl(var(--border))]">
+          <button
+            onClick={() => setAba("andamento")}
+            className={`px-4 py-2 text-[12.5px] font-semibold transition-colors ${
+              aba === "andamento"
+                ? "bg-[hsl(var(--primary))] text-white"
+                : "bg-[hsl(var(--surface2))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+            }`}
+          >
+            Em andamento {qtdAndamento > 0 && `(${qtdAndamento})`}
+          </button>
+          <button
+            onClick={() => setAba("concluidas")}
+            className={`px-4 py-2 text-[12.5px] font-semibold transition-colors border-l border-[hsl(var(--border))] ${
+              aba === "concluidas"
+                ? "bg-[hsl(var(--primary))] text-white"
+                : "bg-[hsl(var(--surface2))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+            }`}
+          >
+            Concluídas {qtdConcluidas > 0 && `(${qtdConcluidas})`}
+          </button>
+        </div>
         <div className="relative flex-1 min-w-[200px] max-w-[340px] ml-auto">
           <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--text-muted))]" />
           <Input
@@ -130,7 +134,9 @@ export default function TacografoLista() {
         <div className="text-center py-12">
           <FileCheck2 className="h-10 w-10 text-[hsl(var(--muted-foreground))]/40 mx-auto mb-3" />
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            Nenhuma ordem de serviço encontrada.
+            {aba === "concluidas"
+              ? "Nenhuma OS concluída."
+              : "Nenhuma OS em andamento."}
           </p>
         </div>
       )}
