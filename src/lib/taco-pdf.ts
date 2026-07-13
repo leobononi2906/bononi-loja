@@ -4,6 +4,39 @@ import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
 const A4: [number, number] = [595.28, 841.89];
 const PRETO = rgb(0, 0, 0);
 
+// ─── SANITIZAÇÃO PARA WinAnsi (Helvetica) ────────────────────────────────
+// pdf-lib com StandardFonts só aceita WinAnsi (Windows-1252).
+// Dados do ERP podem conter 0xFFFD (replacement char) ou encoding duplo.
+function sanitize(text: string): string {
+  if (!text) return "";
+  let s = text;
+  // Remove Unicode replacement character e null
+  s = s.replace(/\uFFFD/g, "");
+  s = s.replace(/\u0000/g, "");
+  // Remove qualquer caractere fora do range WinAnsi
+  // Aceita: 0x20-0x7E (ASCII) + 0xA0-0xFF (Latin-1 Supplement com acentos PT)
+  s = s.replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, (ch) => {
+    const code = ch.charCodeAt(0);
+    if (code === 0x2013 || code === 0x2014) return "-";
+    if (code === 0x2018 || code === 0x2019) return "'";
+    if (code === 0x201C || code === 0x201D) return '"';
+    if (code === 0x2026) return "...";
+    return "";
+  });
+  return s.trim();
+}
+
+// Sanitiza todos os campos de um objeto (só strings)
+function sanitizeAll<T extends Record<string, string>>(raw: T): T {
+  const out = { ...raw };
+  for (const key of Object.keys(out) as (keyof T)[]) {
+    if (typeof out[key] === "string") {
+      (out as Record<string, string>)[key as string] = sanitize(out[key] as string);
+    }
+  }
+  return out;
+}
+
 // ─── DECLARAÇÃO DE RESIDÊNCIA ─────────────────────────────────────────────
 
 export interface DeclaracaoDados {
@@ -48,7 +81,7 @@ function wrapTokens(
   const width = (tk: Tok) => (tk.b ? fontB : fontR).widthOfTextAtSize(tk.t, size);
   for (const tk of words) {
     const isSpace = tk.t.trim() === "";
-    if (line.length === 0 && isSpace) continue; // sem espaço no início da linha
+    if (line.length === 0 && isSpace) continue;
     const tw = width(tk);
     if (w + tw > maxW && line.length > 0 && !isSpace) {
       lines.push(line);
@@ -87,7 +120,10 @@ function drawRich(
   return y;
 }
 
-export async function gerarDeclaracaoPdf(d: DeclaracaoDados): Promise<Uint8Array> {
+export async function gerarDeclaracaoPdf(raw: DeclaracaoDados): Promise<Uint8Array> {
+  // Sanitizar todos os campos dinâmicos (dados do ERP podem ter lixo)
+  const d = sanitizeAll(raw);
+
   const pdf = await PDFDocument.create();
   const page = pdf.addPage(A4);
   const fontR = await pdf.embedFont(StandardFonts.Helvetica);
@@ -100,8 +136,7 @@ export async function gerarDeclaracaoPdf(d: DeclaracaoDados): Promise<Uint8Array
   const maxW = W - ML - MR;
   let y = H - 100;
 
-  // Título sublinhado
-  const titulo = "DECLARAÇÃO DE RESIDÊNCIA PESSOA FÍSICA - PROPRIETÁRIO";
+  const titulo = sanitize("DECLARA\u00C7\u00C3O DE RESID\u00CANCIA PESSOA F\u00CDSICA - PROPRIET\u00C1RIO");
   const tSize = 12.5;
   page.drawText(titulo, { x: ML, y, size: tSize, font: fontB, color: PRETO });
   const tw = fontB.widthOfTextAtSize(titulo, tSize);
@@ -113,31 +148,30 @@ export async function gerarDeclaracaoPdf(d: DeclaracaoDados): Promise<Uint8Array
   });
   y -= 60;
 
-  const up = (s: string) => (s || "").toUpperCase().trim();
+  const up = (s: string) => sanitize(s || "").toUpperCase().trim();
 
-  // Corpo principal
   const corpo: Tok[] = [
     { t: "Eu, " },
     { t: up(d.nome), b: true },
-    { t: ", proprietário do veículo placa " },
+    { t: ", propriet\u00E1rio do ve\u00EDculo placa " },
     { t: up(d.placa), b: true },
     { t: ", renavam " },
     { t: d.renavam || "____________", b: true },
-    { t: ", portador (a) do CPF nº " },
+    { t: ", portador (a) do CPF n\u00BA " },
     { t: d.cpf || "____________", b: true },
-    { t: ", R.G. nº " },
+    { t: ", R.G. n\u00BA " },
     { t: d.rg || "____________", b: true },
     { t: ", " },
     { t: "DECLARO", b: true },
     {
-      t: " para os devidos fins de comprovação de residência, sob as penas da Lei (art. 2º da Lei 7.115/83), e atendimento ao subitem 9.3.4 do RTM aprovados pelos artigos 1º e 2º da Portaria Inmetro 535 de 26 de dezembro de 2019, que sou residente à ",
+      t: " para os devidos fins de comprova\u00E7\u00E3o de resid\u00EAncia, sob as penas da Lei (art. 2\u00BA da Lei 7.115/83), e atendimento ao subitem 9.3.4 do RTM aprovados pelos artigos 1\u00BA e 2\u00BA da Portaria Inmetro 535 de 26 de dezembro de 2019, que sou residente \u00E0 ",
     },
     { t: `${up(d.endereco)}, ${d.numero || "S/N"}`, b: true },
     { t: ", bairro " },
     { t: up(d.bairro), b: true },
     { t: ", CEP " },
     { t: d.cep || "____________", b: true },
-    { t: ", no município de " },
+    { t: ", no munic\u00EDpio de " },
     { t: up(d.cidade), b: true },
     { t: ", estado do " },
     { t: up(d.uf) + ".", b: true },
@@ -153,7 +187,7 @@ export async function gerarDeclaracaoPdf(d: DeclaracaoDados): Promise<Uint8Array
   y = drawRich(
     page,
     [
-      { t: "Declaro ainda, estar ciente de que declaração falsa pode implicar na sanção penal prevista no art. 299 do Código Penal, " },
+      { t: "Declaro ainda, estar ciente de que declara\u00E7\u00E3o falsa pode implicar na san\u00E7\u00E3o penal prevista no art. 299 do C\u00F3digo Penal, " },
       { t: "in verbis:" },
     ],
     ML,
@@ -166,12 +200,12 @@ export async function gerarDeclaracaoPdf(d: DeclaracaoDados): Promise<Uint8Array
   );
   y -= 10;
 
-  // Citação do art. 299 (recuada, menor, itálico)
   const cit =
-    '"Art. 299 – Omitir, em documento público ou particular, declaração que nele deveria constar, ou nele inserir ou fazer inserir declaração falsa ou diversa da que devia ser escrita, com o fim de prejudicar direito, criar obrigação ou alterar a verdade sobre o fato juridicamente relevante. Pena: reclusão de 1 (um) a 5 (cinco) anos e multa, se o documento é público e reclusão de 1 (um) a 3 (três) anos, se o documento é particular."';
+    '"Art. 299 \u2013 Omitir, em documento p\u00FAblico ou particular, declara\u00E7\u00E3o que nele deveria constar, ou nele inserir ou fazer inserir declara\u00E7\u00E3o falsa ou diversa da que devia ser escrita, com o fim de prejudicar direito, criar obriga\u00E7\u00E3o ou alterar a verdade sobre o fato juridicamente relevante. Pena: reclus\u00E3o de 1 (um) a 5 (cinco) anos e multa, se o documento \u00E9 p\u00FAblico e reclus\u00E3o de 1 (um) a 3 (tr\u00EAs) anos, se o documento \u00E9 particular."';
   const citX = ML + 90;
   const citW = maxW - 90;
-  const citLines = wrapTokens([{ t: cit }], fontI, fontI, 9.5, citW);
+  const citSafe = sanitize(cit);
+  const citLines = wrapTokens([{ t: citSafe }], fontI, fontI, 9.5, citW);
   for (const line of citLines) {
     let cx = citX;
     for (const tk of line) {
@@ -182,13 +216,11 @@ export async function gerarDeclaracaoPdf(d: DeclaracaoDados): Promise<Uint8Array
   }
   y -= 45;
 
-  // Local e data (centralizado)
   const localData = `${up(d.cidadeAssinatura)}, ${d.data}.`;
   const ldW = fontR.widthOfTextAtSize(localData, 11.5);
   page.drawText(localData, { x: (W - ldW) / 2, y, size: 11.5, font: fontR, color: PRETO });
   y -= 80;
 
-  // Linha de assinatura
   const assW = 280;
   page.drawLine({
     start: { x: (W - assW) / 2, y },
@@ -201,9 +233,9 @@ export async function gerarDeclaracaoPdf(d: DeclaracaoDados): Promise<Uint8Array
   const atW = fontR.widthOfTextAtSize(assTxt, 10);
   page.drawText(assTxt, { x: (W - atW) / 2, y, size: 10, font: fontR, color: PRETO });
 
-  // Rodapé legal
-  const rodape =
-    "Subitem 9.3.4 do RTM aprovados pelos artigos 1º e 2º da Portaria Inmetro 935, item 9.3.4 Para a execução do serviço, o veículo deverá ser apresentado com documento que lhe permita circular em trânsito, expedido por órgão competente, juntamente com comprovante de residência do proprietário ou declaração de moradia.";
+  const rodape = sanitize(
+    "Subitem 9.3.4 do RTM aprovados pelos artigos 1\u00BA e 2\u00BA da Portaria Inmetro 935, item 9.3.4 Para a execu\u00E7\u00E3o do servi\u00E7o, o ve\u00EDculo dever\u00E1 ser apresentado com documento que lhe permita circular em tr\u00E2nsito, expedido por \u00F3rg\u00E3o competente, juntamente com comprovante de resid\u00EAncia do propriet\u00E1rio ou declara\u00E7\u00E3o de moradia."
+  );
   let ry = 90;
   const rLines = wrapTokens([{ t: rodape }], fontR, fontB, 8.5, maxW);
   for (const line of rLines) {
@@ -227,8 +259,6 @@ export interface DossieItem {
   nome?: string | null;
 }
 
-// Imagens: 2 por página (metade superior / inferior), como no modelo.
-// PDFs anexados (ex.: CRLV digital): páginas copiadas na íntegra.
 export async function gerarDossiePdf(itens: DossieItem[]): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const [W, H] = A4;
@@ -285,14 +315,11 @@ export async function gerarDossiePdf(itens: DossieItem[]): Promise<Uint8Array> {
 }
 
 // ─── ABRIR / BAIXAR PDF ───────────────────────────────────────────────────
-// Usa download direto via <a> para evitar bloqueio de popup em mobile/Safari
 
 export function abrirPdf(bytes: Uint8Array, nomeArquivo: string) {
   const blob = new Blob([bytes], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
 
-  // Tenta abrir em nova aba primeiro (funciona em desktop)
-  // Se falhar (popup bloqueado em mobile/Safari), força download
   const a = document.createElement("a");
   a.href = url;
   a.download = nomeArquivo;
