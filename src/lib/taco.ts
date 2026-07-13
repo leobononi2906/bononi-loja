@@ -12,7 +12,8 @@ export type TacoAnexoTipo =
   | "DISCO_1"
   | "DISCO_2"
   | "CRLV"
-  | "COMPROVANTE_ENDERECO";
+  | "COMPROVANTE_ENDERECO"
+  | "FOTO_TACOGRAFO_2";
 
 export interface TacoOrdem {
   id: number;
@@ -54,10 +55,12 @@ export interface SlotDef {
   label: string;
   origem: "SERVICO" | "RECEPCAO";
   aceitaPdf?: boolean;
+  opcional?: boolean;
 }
 
 export const ANEXO_TIPOS: SlotDef[] = [
   { tipo: "FOTO_TACOGRAFO", label: "Foto do tacógrafo", origem: "SERVICO" },
+  { tipo: "FOTO_TACOGRAFO_2", label: "Foto do tacógrafo — foto 2", origem: "SERVICO", opcional: true },
   { tipo: "DISCO_1", label: "Disco do tacógrafo — foto 1", origem: "SERVICO" },
   { tipo: "DISCO_2", label: "Disco do tacógrafo — foto 2", origem: "SERVICO" },
   { tipo: "CRLV", label: "CRLV do veículo", origem: "RECEPCAO", aceitaPdf: true },
@@ -78,9 +81,15 @@ export const DOSSIE_ORDEM: TacoAnexoTipo[] = [
 export const TIPOS_COMPROVANTE_LEGADO = ["COMPROVANTE_RESIDENCIA", "CARTAO_CNPJ"];
 
 // Conta documentos únicos considerando tipos legados
+// Tipos opcionais não contam para completude
+const TIPOS_OPCIONAIS = new Set(
+  ANEXO_TIPOS.filter((s) => s.opcional).map((s) => s.tipo)
+);
+
 export function contarDocsUnicos(anexoTipos: string[]): number {
   const tipos = new Set<string>();
   for (const t of anexoTipos) {
+    if (TIPOS_OPCIONAIS.has(t as TacoAnexoTipo)) continue;
     if (TIPOS_COMPROVANTE_LEGADO.includes(t)) {
       tipos.add("COMPROVANTE_ENDERECO");
     } else {
@@ -99,7 +108,7 @@ export interface StatusVisualInfo {
   badgeClass: string;
 }
 
-const TOTAL_DOCS = ANEXO_TIPOS.length; // 5
+const TOTAL_DOCS = ANEXO_TIPOS.filter((s) => !s.opcional).length; // 5 obrigatórios
 
 export function derivarStatusVisual(statusBanco: TacoStatus, qtdDocs: number): StatusVisualInfo {
   if (statusBanco === "CONCLUIDA") {
