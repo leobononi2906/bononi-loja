@@ -2,13 +2,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Search, AlertCircle, Gauge, FileCheck2 } from "lucide-react";
+import { Plus, Search, AlertCircle, Gauge, FileCheck2, CheckCircle2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   db, fmtData, ANEXO_TIPOS, derivarStatusVisual, contarDocsUnicos,
-  TacoOrdem, StatusVisual,
+  TacoOrdem,
 } from "@/lib/taco";
 
 type OrdemComAnexos = TacoOrdem & { taco_anexos: { tipo: string }[] };
@@ -107,13 +107,10 @@ export default function TacografoLista() {
 
       {/* Loading */}
       {isLoading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="metric-card space-y-3">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-6 w-40" />
-              <Skeleton className="h-4 w-32" />
-            </div>
+        <div className="chart-container">
+          <Skeleton className="h-4 w-48 mb-4" />
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full mb-2" />
           ))}
         </div>
       )}
@@ -143,46 +140,116 @@ export default function TacografoLista() {
         </div>
       )}
 
-      {/* Cards */}
+      {/* DESKTOP — Tabela */}
       {!isLoading && !error && lista.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {lista.map((o) => {
-            const tiposRaw = (o.taco_anexos ?? []).map((a) => a.tipo);
-            const docs = contarDocsUnicos(tiposRaw);
-            const sv = derivarStatusVisual(o.status, docs);
-            return (
-              <button
-                key={o.id}
-                onClick={() => navigate(`/tacografo/${o.id}`)}
-                className="metric-card text-left w-full min-w-0 overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-              >
-                <div className="flex items-start justify-between gap-2 mb-1.5">
-                  <span
-                    className="font-bold text-[16px]"
-                    style={{ fontFamily: "'DM Mono', monospace", color: "hsl(var(--primary))" }}
-                  >
-                    OS {o.numero_os}
-                  </span>
-                  <span className={`b-badge ${sv.badgeClass}`}>
-                    {sv.label}
-                  </span>
-                </div>
-                <p className="text-[14px] font-semibold text-[hsl(var(--foreground))] truncate">
-                  {o.cliente_nome}
-                </p>
-                <p className="text-[12.5px] text-[hsl(var(--muted-foreground))] truncate">
-                  {[o.veiculo_placa, o.veiculo_marca_modelo].filter(Boolean).join(" · ") || "Veículo não informado"}
-                </p>
-                <div className="flex items-center justify-between mt-3">
-                  <span className={`b-badge ${docs >= TOTAL_DOCS ? "b-badge-ok" : docs > 0 ? "b-badge-critico" : "b-badge-muted"}`}>
-                    {docs}/{TOTAL_DOCS} docs
-                  </span>
-                  <span className="text-[11px] text-[hsl(var(--text-muted))]">{fmtData(o.criado_em)}</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+        <>
+          <div className="hidden md:block chart-container overflow-x-auto">
+            <table className="data-table w-full">
+              <thead>
+                <tr>
+                  <th className="text-left">OS</th>
+                  <th className="text-left">Cliente</th>
+                  <th className="text-left">Placa</th>
+                  <th className="text-left">Veículo</th>
+                  <th className="text-center">Docs</th>
+                  <th className="text-left">Status</th>
+                  <th className="text-right">Data</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lista.map((o) => {
+                  const tiposRaw = (o.taco_anexos ?? []).map((a) => a.tipo);
+                  const docs = contarDocsUnicos(tiposRaw);
+                  const sv = derivarStatusVisual(o.status, docs);
+                  const completo = docs >= TOTAL_DOCS;
+                  return (
+                    <tr
+                      key={o.id}
+                      onClick={() => navigate(`/tacografo/${o.id}`)}
+                      className="cursor-pointer"
+                    >
+                      <td>
+                        <span
+                          className="font-bold text-[14px]"
+                          style={{ fontFamily: "'DM Mono', monospace", color: "hsl(var(--primary))" }}
+                        >
+                          {o.numero_os}
+                        </span>
+                      </td>
+                      <td className="font-medium max-w-[250px] truncate">{o.cliente_nome}</td>
+                      <td>
+                        <span style={{ fontFamily: "'DM Mono', monospace" }}>
+                          {o.veiculo_placa || "—"}
+                        </span>
+                      </td>
+                      <td className="text-[hsl(var(--muted-foreground))] max-w-[180px] truncate">
+                        {o.veiculo_marca_modelo || "—"}
+                      </td>
+                      <td className="text-center">
+                        {completo ? (
+                          <CheckCircle2 className="h-4 w-4 text-[hsl(var(--success))] mx-auto" />
+                        ) : (
+                          <span className={`b-badge ${docs > 0 ? "b-badge-critico" : "b-badge-muted"}`}>
+                            {docs}/{TOTAL_DOCS}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <span className={`b-badge ${sv.badgeClass}`}>{sv.label}</span>
+                      </td>
+                      <td className="text-right text-[hsl(var(--text-muted))]">{fmtData(o.criado_em)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* MOBILE — Cards */}
+          <div className="md:hidden grid grid-cols-1 gap-3">
+            {lista.map((o) => {
+              const tiposRaw = (o.taco_anexos ?? []).map((a) => a.tipo);
+              const docs = contarDocsUnicos(tiposRaw);
+              const sv = derivarStatusVisual(o.status, docs);
+              const completo = docs >= TOTAL_DOCS;
+              return (
+                <button
+                  key={o.id}
+                  onClick={() => navigate(`/tacografo/${o.id}`)}
+                  className="metric-card text-left w-full min-w-0 overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                >
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <span
+                      className="font-bold text-[16px]"
+                      style={{ fontFamily: "'DM Mono', monospace", color: "hsl(var(--primary))" }}
+                    >
+                      OS {o.numero_os}
+                    </span>
+                    <span className={`b-badge ${sv.badgeClass}`}>{sv.label}</span>
+                  </div>
+                  <p className="text-[14px] font-semibold text-[hsl(var(--foreground))] truncate">
+                    {o.cliente_nome}
+                  </p>
+                  <p className="text-[12.5px] text-[hsl(var(--muted-foreground))] truncate">
+                    {[o.veiculo_placa, o.veiculo_marca_modelo].filter(Boolean).join(" · ") || "Veículo não informado"}
+                  </p>
+                  <div className="flex items-center justify-between mt-3">
+                    {completo ? (
+                      <span className="b-badge b-badge-ok flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" /> Completo
+                      </span>
+                    ) : (
+                      <span className={`b-badge ${docs > 0 ? "b-badge-critico" : "b-badge-muted"}`}>
+                        {docs}/{TOTAL_DOCS} docs
+                      </span>
+                    )}
+                    <span className="text-[11px] text-[hsl(var(--text-muted))]">{fmtData(o.criado_em)}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );
