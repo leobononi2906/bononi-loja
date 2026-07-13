@@ -16,7 +16,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import {
   db, tacoLog, comprimirImagem, anexoUrl, fmtData, proximoNumeroOS,
-  derivarStatusVisual, ANEXO_TIPOS, DOSSIE_ORDEM,
+  derivarStatusVisual, contarDocsUnicos,
+  ANEXO_TIPOS, DOSSIE_ORDEM, TIPOS_COMPROVANTE_LEGADO,
   TacoOrdem, TacoAnexo, TacoAnexoTipo,
 } from "@/lib/taco";
 import { gerarDeclaracaoPdf, gerarDossiePdf, abrirPdf, DeclaracaoDados } from "@/lib/taco-pdf";
@@ -41,6 +42,17 @@ function Campo({ label, children, className = "" }: { label: string; children: R
       {children}
     </div>
   );
+}
+
+// Encontra o anexo para um slot, considerando tipos legados para COMPROVANTE_ENDERECO
+function encontrarAnexo(anexos: TacoAnexo[], tipo: TacoAnexoTipo): TacoAnexo | undefined {
+  const direto = anexos.find((a) => a.tipo === tipo);
+  if (direto) return direto;
+  // Se é slot de comprovante, aceita tipos legados
+  if (tipo === "COMPROVANTE_ENDERECO") {
+    return anexos.find((a) => TIPOS_COMPROVANTE_LEGADO.includes(a.tipo));
+  }
+  return undefined;
 }
 
 export default function TacografoOrdem() {
@@ -78,7 +90,6 @@ export default function TacografoOrdem() {
     },
   });
 
-  // Preenche o form de edição quando a ordem carrega
   if (ordem && !formCarregado.current) {
     formCarregado.current = true;
     setForm({
@@ -102,12 +113,9 @@ export default function TacografoOrdem() {
   }
 
   const anexos: TacoAnexo[] = Array.isArray(ordem?.taco_anexos) ? ordem!.taco_anexos : [];
-  const docsEnviados = new Set(anexos.map((a) => a.tipo)).size;
+  const docsEnviados = contarDocsUnicos(anexos.map((a) => a.tipo));
 
-  // Status visual derivado
-  const statusVisual = ordem
-    ? derivarStatusVisual(ordem.status, docsEnviados)
-    : null;
+  const statusVisual = ordem ? derivarStatusVisual(ordem.status, docsEnviados) : null;
 
   // ─── Busca cliente no ERP ───
   const { data: clientesERP, isFetching: buscandoCliente } = useQuery({
@@ -120,7 +128,6 @@ export default function TacografoOrdem() {
         .ilike("nome_cliente", `%${buscaCliente.trim()}%`)
         .limit(30);
       if (error) throw error;
-      // vista pode ter linhas duplicadas por cliente — dedup por id_cliente
       const map = new Map<number, Record<string, unknown>>();
       (data ?? []).forEach((c: Record<string, unknown>) => {
         const cid = Number(c.id_cliente);
@@ -160,7 +167,6 @@ export default function TacografoOrdem() {
     };
     try {
       if (isNova) {
-        // Gera número automático sequencial
         const numero_os = await proximoNumeroOS();
         const { data, error } = await db
           .from("taco_ordens")
@@ -233,12 +239,13 @@ export default function TacografoOrdem() {
         .upload(path, blob, { contentType: mime, upsert: true });
       if (upErr) throw upErr;
 
-      const existente = anexos.find((a) => a.tipo === tipo);
+      // Para o slot de comprovante, remove qualquer tipo legado existente também
+      const existente = encontrarAnexo(anexos, tipo);
       if (existente) {
         await supabase.storage.from("taco-docs").remove([existente.storage_path]);
         const { error } = await db
           .from("taco_anexos")
-          .update({ storage_path: path, nome_arquivo: file.name, mime_type: mime, criado_em: new Date().toISOString() })
+          .update({ tipo, storage_path: path, nome_arquivo: file.name, mime_type: mime, criado_em: new Date().toISOString() })
           .eq("id", existente.id);
         if (error) throw error;
       } else {
@@ -325,8 +332,9 @@ export default function TacografoOrdem() {
     if (!ordem || anexos.length === 0) return;
     setGerandoDossie(true);
     try {
+      // Monta itens na ordem correta, considerando tipos legados
       const itens = DOSSIE_ORDEM
-        .map((t) => anexos.find((a) => a.tipo === t))
+        .map((t) => encontrarAnexo(anexos, t))
         .filter(Boolean)
         .map((a) => ({
           tipo: a!.tipo, url: anexoUrl(a!.storage_path),
@@ -474,7 +482,6 @@ export default function TacografoOrdem() {
             )}
           </div>
 
-          {/* Dados da OS + cliente — sem campo numero_os (gerado automaticamente) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <Campo label="Nome do cliente *" className="lg:col-span-2"><Input value={form.cliente_nome} onChange={set("cliente_nome")} /></Campo>
             <Campo label="Código ERP"><Input value={String(form.cliente_codigo_erp)} onChange={set("cliente_codigo_erp")} inputMode="numeric" /></Campo>
@@ -530,7 +537,7 @@ export default function TacografoOrdem() {
           <h2 className="text-[14px] font-bold text-[hsl(var(--foreground))]">Documentos</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {ANEXO_TIPOS.map((slotDef) => {
-              const anexo = anexos.find((a) => a.tipo === slotDef.tipo);
+              const anexo = encontrarAnexo(anexos, slotDef.tipo);
               const isPdf = anexo && ((anexo.mime_type || "").includes("pdf") || (anexo.nome_arquivo || "").toLowerCase().endsWith(".pdf"));
               const emUpload = uploading === slotDef.tipo;
               const inputId = `taco-file-${slotDef.tipo}`;

@@ -7,17 +7,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  db, fmtData, ANEXO_TIPOS, derivarStatusVisual,
-  TacoOrdem,
+  db, fmtData, ANEXO_TIPOS, derivarStatusVisual, contarDocsUnicos,
+  TacoOrdem, StatusVisual,
 } from "@/lib/taco";
 
 type OrdemComAnexos = TacoOrdem & { taco_anexos: { tipo: string }[] };
 
 const TOTAL_DOCS = ANEXO_TIPOS.length;
 
+type FiltroAba = "andamento" | "concluidas";
+
 export default function TacografoLista() {
   const navigate = useNavigate();
-  const [aba, setAba] = useState<"andamento" | "concluidas">("andamento");
+  const [aba, setAba] = useState<FiltroAba>("andamento");
   const [busca, setBusca] = useState("");
 
   const { data, isLoading, error } = useQuery({
@@ -145,8 +147,8 @@ export default function TacografoLista() {
       {!isLoading && !error && lista.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {lista.map((o) => {
-            const tipos = new Set((o.taco_anexos ?? []).map((a) => a.tipo));
-            const docs = tipos.size;
+            const tiposRaw = (o.taco_anexos ?? []).map((a) => a.tipo);
+            const docs = contarDocsUnicos(tiposRaw);
             const sv = derivarStatusVisual(o.status, docs);
             return (
               <button

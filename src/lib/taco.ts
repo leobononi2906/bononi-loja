@@ -12,8 +12,7 @@ export type TacoAnexoTipo =
   | "DISCO_1"
   | "DISCO_2"
   | "CRLV"
-  | "COMPROVANTE_RESIDENCIA"
-  | "CARTAO_CNPJ";
+  | "COMPROVANTE_ENDERECO";
 
 export interface TacoOrdem {
   id: number;
@@ -62,22 +61,36 @@ export const ANEXO_TIPOS: SlotDef[] = [
   { tipo: "DISCO_1", label: "Disco do tacógrafo — foto 1", origem: "SERVICO" },
   { tipo: "DISCO_2", label: "Disco do tacógrafo — foto 2", origem: "SERVICO" },
   { tipo: "CRLV", label: "CRLV do veículo", origem: "RECEPCAO", aceitaPdf: true },
-  { tipo: "COMPROVANTE_RESIDENCIA", label: "Declaração de residência assinada", origem: "RECEPCAO", aceitaPdf: true },
-  { tipo: "CARTAO_CNPJ", label: "Cartão CNPJ", origem: "RECEPCAO", aceitaPdf: true },
+  { tipo: "COMPROVANTE_ENDERECO", label: "Comp. Residência / Cartão CNPJ", origem: "RECEPCAO", aceitaPdf: true },
 ];
 
-// Ordem das páginas no dossiê final (segue o modelo: tacógrafo + CRLV, discos, comprovantes)
+// Ordem das páginas no dossiê final
 export const DOSSIE_ORDEM: TacoAnexoTipo[] = [
   "FOTO_TACOGRAFO",
   "CRLV",
   "DISCO_1",
   "DISCO_2",
-  "COMPROVANTE_RESIDENCIA",
-  "CARTAO_CNPJ",
+  "COMPROVANTE_ENDERECO",
 ];
 
+// Tipos antigos que podem existir no banco (backward compat)
+// Se encontrar COMPROVANTE_RESIDENCIA ou CARTAO_CNPJ, conta como COMPROVANTE_ENDERECO
+export const TIPOS_COMPROVANTE_LEGADO = ["COMPROVANTE_RESIDENCIA", "CARTAO_CNPJ"];
+
+// Conta documentos únicos considerando tipos legados
+export function contarDocsUnicos(anexoTipos: string[]): number {
+  const tipos = new Set<string>();
+  for (const t of anexoTipos) {
+    if (TIPOS_COMPROVANTE_LEGADO.includes(t)) {
+      tipos.add("COMPROVANTE_ENDERECO");
+    } else {
+      tipos.add(t);
+    }
+  }
+  return tipos.size;
+}
+
 // ─── STATUS VISUAL DERIVADO ──────────────────────────────────────────────
-// Status do banco (ABERTA/CONCLUIDA) + contagem de docs = status visual
 export type StatusVisual = "ABERTA" | "PEND_DOC" | "DOCS_OK" | "CONCLUIDA";
 
 export interface StatusVisualInfo {
@@ -86,7 +99,7 @@ export interface StatusVisualInfo {
   badgeClass: string;
 }
 
-const TOTAL_DOCS = ANEXO_TIPOS.length; // 6
+const TOTAL_DOCS = ANEXO_TIPOS.length; // 5
 
 export function derivarStatusVisual(statusBanco: TacoStatus, qtdDocs: number): StatusVisualInfo {
   if (statusBanco === "CONCLUIDA") {
