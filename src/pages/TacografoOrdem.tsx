@@ -333,11 +333,25 @@ export default function TacografoOrdem() {
     }
   };
 
-  const excluirAnexo = async (anexo: TacoAnexo) => {
+  const [confirmCnpj, setConfirmCnpj] = useState<TacoAnexo | null>(null);
+
+  const excluirAnexo = async (anexo: TacoAnexo, tambemRemoverCnpjCard = false) => {
     try {
       await supabase.storage.from("taco-docs").remove([anexo.storage_path]);
       const { error } = await db.from("taco_anexos").delete().eq("id", anexo.id);
       if (error) throw error;
+
+      // Se pediu pra remover o cartão CNPJ salvo também
+      if (tambemRemoverCnpjCard && ordem?.cliente_cnpj) {
+        const cnpjLimpo = ordem.cliente_cnpj.replace(/\D/g, "");
+        if (cnpjLimpo.length >= 14) {
+          await db.from("taco_cnpj_cards").delete().eq("cnpj", cnpjLimpo);
+          tacoLog("ACAO", "REMOVER_CNPJ_CARD", {
+            entidade: "taco_cnpj_cards", contexto: { cnpj: cnpjLimpo },
+          });
+        }
+      }
+
       tacoLog("ACAO", "EXCLUIR_ANEXO", {
         entidade: "taco_anexo", id_entidade: anexo.id,
         nome_entidade: `OS ${ordem?.numero_os} — ${anexo.tipo}`,
@@ -347,6 +361,18 @@ export default function TacografoOrdem() {
     } catch (err) {
       tacoLog("ERRO", "ERRO_EXCLUIR_ANEXO", { erro: err as Error, id_entidade: anexo.id });
       toast.error("Erro ao excluir o documento.");
+    }
+  };
+
+  const handleExcluirAnexo = (anexo: TacoAnexo) => {
+    // Se é comprovante que veio do auto-CNPJ, pergunta se quer desvincular
+    const isAutoComprovante =
+      (anexo.tipo === "COMPROVANTE_ENDERECO" || TIPOS_COMPROVANTE_LEGADO.includes(anexo.tipo)) &&
+      anexo.enviado_por === "AUTO_CNPJ";
+    if (isAutoComprovante) {
+      setConfirmCnpj(anexo);
+    } else {
+      excluirAnexo(anexo);
     }
   };
 
@@ -672,13 +698,20 @@ export default function TacografoOrdem() {
                           Substituir
                         </label>
                         <button
-                          onClick={() => excluirAnexo(anexo)}
+                          onClick={() => handleExcluirAnexo(anexo)}
                           className="h-8 w-8 rounded-md flex items-center justify-center bg-destructive/10 text-destructive"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                      <p className="text-[10.5px] text-[hsl(var(--text-muted))]">{fmtData(anexo.criado_em)}</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10.5px] text-[hsl(var(--text-muted))]">{fmtData(anexo.criado_em)}</p>
+                        {anexo.enviado_por === "AUTO_CNPJ" && (
+                          <span className="text-[10px] font-semibold text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-1.5 py-0.5 rounded">
+                            Upload automático
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -721,6 +754,41 @@ export default function TacografoOrdem() {
             <Button variant="outline" onClick={() => setDeclOpen(false)}>Cancelar</Button>
             <Button onClick={gerarDeclaracao} className="gap-1.5">
               <Printer className="h-4 w-4" /> Gerar PDF para impressão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal — Confirmar remoção de cartão CNPJ */}
+      <Dialog open={!!confirmCnpj} onOpenChange={(open) => !open && setConfirmCnpj(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remover cartão CNPJ</DialogTitle>
+          </DialogHeader>
+          <p className="text-[13.5px] text-[hsl(var(--muted-foreground))] leading-relaxed">
+            Esse documento foi puxado automaticamente pelo CNPJ do cliente.
+            Deseja remover também o cartão salvo para que ele <strong>não seja puxado nas próximas OS</strong>?
+          </p>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                if (confirmCnpj) excluirAnexo(confirmCnpj, false);
+                setConfirmCnpj(null);
+              }}
+            >
+              Só desta OS
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1"
+              onClick={() => {
+                if (confirmCnpj) excluirAnexo(confirmCnpj, true);
+                setConfirmCnpj(null);
+              }}
+            >
+              Remover de todas
             </Button>
           </DialogFooter>
         </DialogContent>
