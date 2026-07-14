@@ -156,6 +156,49 @@ export default function TacografoOrdem() {
     setBuscaCliente("");
   };
 
+  // ─── Puxa cartão CNPJ salvo automaticamente ───
+  const puxarCnpjCard = async (ordemId: number, cnpj: string) => {
+    const cnpjLimpo = cnpj.replace(/\D/g, "");
+    if (cnpjLimpo.length < 14) return;
+    try {
+      const { data: card } = await db
+        .from("taco_cnpj_cards")
+        .select("*")
+        .eq("cnpj", cnpjLimpo)
+        .single();
+      if (!card) return;
+
+      // Verifica se já tem comprovante nessa OS
+      const { data: existentes } = await db
+        .from("taco_anexos")
+        .select("id")
+        .eq("id_ordem", ordemId)
+        .eq("tipo", "COMPROVANTE_ENDERECO");
+      if (existentes && existentes.length > 0) return;
+
+      // Copia o arquivo no storage pra pasta da OS
+      const ext = (card.nome_arquivo || "pdf").split(".").pop() || "pdf";
+      const novoPath = `os_${ordemId}/COMPROVANTE_ENDERECO_${Date.now()}.${ext}`;
+      const { error: copyErr } = await supabase.storage
+        .from("taco-docs")
+        .copy(card.storage_path, novoPath);
+      if (copyErr) return;
+
+      await db.from("taco_anexos").insert({
+        id_ordem: ordemId,
+        tipo: "COMPROVANTE_ENDERECO",
+        storage_path: novoPath,
+        nome_arquivo: card.nome_arquivo,
+        mime_type: card.mime_type,
+        enviado_por: "AUTO_CNPJ",
+      });
+      tacoLog("ACAO", "CNPJ_CARD_AUTO", {
+        entidade: "taco_anexo", id_entidade: ordemId,
+        contexto: { cnpj: cnpjLimpo, origem: card.storage_path },
+      });
+    } catch { /* silencioso — não bloqueia criação da OS */ }
+  };
+
   // ─── Salvar (criar ou editar) ───
   const salvar = async () => {
     if (!form.cliente_nome.trim()) return toast.error("Informe o nome do cliente.");
@@ -179,6 +222,11 @@ export default function TacografoOrdem() {
           nome_entidade: `OS ${numero_os} — ${form.cliente_nome}`,
           depois: { ...payload, numero_os },
         });
+        // Puxa cartão CNPJ automaticamente se cliente tem CNPJ
+        if (form.cliente_cnpj) {
+          await puxarCnpjCard(data.id, form.cliente_cnpj);
+        }
+
         toast.success(`Ordem de serviço nº ${numero_os} criada.`);
         qc.invalidateQueries({ queryKey: ["taco-ordens"] });
         navigate(`/tacografo/${data.id}`, { replace: true });
@@ -254,6 +302,19 @@ export default function TacografoOrdem() {
           enviado_por: ANEXO_TIPOS.find((t) => t.tipo === tipo)?.origem ?? null,
         });
         if (error) throw error;
+      }
+
+      // Se é comprovante/CNPJ e a OS tem CNPJ, salva referência para reuso
+      if (tipo === "COMPROVANTE_ENDERECO" && ordem.cliente_cnpj) {
+        const cnpjLimpo = ordem.cliente_cnpj.replace(/\D/g, "");
+        if (cnpjLimpo.length >= 14) {
+          try {
+            await db.from("taco_cnpj_cards").upsert(
+              { cnpj: cnpjLimpo, storage_path: path, nome_arquivo: file.name, mime_type: mime, atualizado_em: new Date().toISOString() },
+              { onConflict: "cnpj" }
+            );
+          } catch { /* não bloqueia o fluxo */ }
+        }
       }
 
       tacoLog("ACAO", "ENVIAR_ANEXO", {
