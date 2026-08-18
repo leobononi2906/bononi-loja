@@ -9,9 +9,6 @@ import { SortableHeader } from "./SortableHeader";
 import { useSortable } from "@/hooks/useSortable";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/data/mockData";
-import { useShell } from "@/components/layout/AppShell";
-import { useViewData } from "@/hooks/useComercialData";
-import { buildVendedorInfo } from "@/lib/dim-vendedor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -102,7 +99,6 @@ function badgeDias(dias: number): { cls: string; label: string } {
 
 export function VendasSemFaturamentoTab() {
   const qc = useQueryClient();
-  const { filters } = useShell();
   const [tipoFiltro, setTipoFiltro] = useState<TipoFiltro>("todos");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("30d");
   const [customInicio, setCustomInicio] = useState("");
@@ -110,11 +106,6 @@ export function VendasSemFaturamentoTab() {
   const [vendedorFiltro, setVendedorFiltro] = useState("todos");
   const [drawerVenda, setDrawerVenda] = useState<VendaSemFat | null>(null);
   const [usuario, setUsuario] = useState(getUsuarioNome());
-
-  // Vendedores da loja física (mesma fonte usada em ComercialVendedoresTab) — filtra o dropdown,
-  // não os dados: online/distribuição continuam aparecendo na lista, só não entram como opção de vendedor.
-  const dimVendedor = useViewData("vw_loja_vendedores", filters, 5000, { skipDate: true, skipTipoSaida: true });
-  const vendedorInfo = useMemo(() => buildVendedorInfo(dimVendedor.data), [dimVendedor.data]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["vendas_sem_faturamento"],
@@ -142,19 +133,23 @@ export function VendasSemFaturamentoTab() {
     refetchInterval: 5 * 60 * 1000,
   });
 
-  const rows = useMemo(() => data ?? [], [data]);
+  // Escopo fixo da loja física: O.S. só tipo NORMAL, Venda só canal LOJA (exclui DISTRIBUICAO/ONLINE
+  // — vendedores de marketplace/atacado como SHOPEE/ML BONONI não são operação de loja).
+  const rows = useMemo(() => {
+    return (data ?? []).filter(
+      (r) =>
+        (r.tipo_doc === "O.S." && r.tipo_saida === "NORMAL") ||
+        (r.tipo_doc === "VENDA" && r.tipo_saida === "LOJA")
+    );
+  }, [data]);
 
-  // Dropdown só com vendedores da loja física (departamento LOJA/LOJA GONDOLA em vw_loja_vendedores)
   const vendedores = useMemo(() => {
     const map = new Map<string, string>();
     rows.forEach((r) => {
-      const id = String(r.id_vendedor ?? "");
-      if (id && vendedorInfo.ids.has(id)) {
-        map.set(id, vendedorInfo.names.get(id) || r.vendedor || `Vend. #${id}`);
-      }
+      if (r.id_vendedor) map.set(String(r.id_vendedor), r.vendedor || `Vend. #${r.id_vendedor}`);
     });
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [rows, vendedorInfo]);
+  }, [rows]);
 
   const filtered = useMemo(() => {
     let out = rows;
@@ -211,7 +206,7 @@ export function VendasSemFaturamentoTab() {
           Vendas sem Faturamento
         </h2>
         <p className="text-xs text-muted-foreground">
-          Vendas e OS concluídas que ainda não geraram movimento de faturamento — ordenadas pelas mais paradas.
+          Vendas (canal loja) e O.S. normais concluídas que ainda não geraram movimento de faturamento — ordenadas pelas mais paradas.
         </p>
       </div>
 

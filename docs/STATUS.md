@@ -23,7 +23,7 @@ React + **TypeScript** + Vite + Tailwind + **shadcn/ui** + react-router-dom. Cli
 - **Próprias `loja_`:** `loja_gondola` (planograma), `loja_config_colaborador` (setor/colaborador da loja), `loja_frontend_logs`.
 - **Tacógrafo `taco_`:** `taco_ordens`, `taco_anexos`, `taco_cnpj_cards`, `taco_logs`. Storage bucket **`taco-docs`** (upload de documentos, badge automático).
 - **Compartilhadas:** `vw_dim_cliente`, `vw_fb_produtos_compras`, dados comerciais (`useComercialData.ts`, `dim-cliente.ts`, `dim-vendedor.ts`).
-- **Vendas sem faturamento:** `vw_vendas_sem_faturamento` (backend do replicador, `rep_vendas_sem_faturamento`) + `vendas_sem_fat_followup` (CRUD anon direto). Tela mostra VENDA **e** O.S. juntos (~11.3k linhas), abre por padrão em "Últimos 30d".
+- **Vendas sem faturamento:** `vw_vendas_sem_faturamento` (backend do replicador, `rep_vendas_sem_faturamento`) + `vendas_sem_fat_followup` (CRUD anon direto). Tela restringe direto na base a O.S. `tipo_saida=NORMAL` + Venda `tipo_saida=LOJA` (exclui DISTRIBUICAO/ONLINE — não é operação de loja física), abre por padrão em "Últimos 30d".
 
 ## Arquitetura
 - **Padrão de tela:** página em `src/pages/` é fina (repassa `filters` do `AppShell`) e delega pra um componente pesado em `src/components/dashboard/` (ex: `ServicosPatio.tsx` ~250B → `PatioTab.tsx` 20.9KB). Não é placeholder — é o padrão do projeto inteiro.
@@ -46,6 +46,7 @@ React + **TypeScript** + Vite + Tailwind + **shadcn/ui** + react-router-dom. Cli
 - O projeto Supabase tem um teto de **"max rows" no PostgREST** (retorna no máx. 10000 por request, mesmo pedindo `.range()` maior) — `useQuery` da tela pagina em lotes de 1000 até esgotar. Se outra tela algum dia buscar uma tabela/view que passe de 10k linhas, lembrar desse teto (não é bug do Supabase, é config do projeto).
 
 ## Dev-log
+- 2026-08-18 — Vendas sem Faturamento: trocado o filtro de vendedor (via `vw_loja_vendedores`) por restrição direta na base — O.S. só `tipo_saida=NORMAL`, Venda só `tipo_saida=LOJA` (exclui DISTRIBUICAO/ONLINE). Dropdown de vendedor passa a derivar naturalmente dessa base já restrita, sem cruzar com outra view.
 - 2026-08-18 — Vendas sem Faturamento: filtro Vendedor restrito a vendedores da loja física (`vw_loja_vendedores`, mesma fonte do `ComercialVendedoresTab`) + filtro Tipo (Todos/Venda/OS) no topo da tela.
 - 2026-08-18 — Aba "Vendas sem Faturamento" (`/vendas/sem-faturamento`): lista + filtros rápidos/data custom/vendedor + follow-up (CRUD) por venda, VENDA+O.S. juntos (default "Últimos 30d"), paginação da busca (teto de max-rows do PostgREST) e teto de renderização de 1000 linhas c/ aviso. Achado e corrigido timeout de performance na view (índice faltando). Ver armadilhas acima.
 - 2026-08-18 — Mapeamento profundo do código (arquitetura, dados, armadilhas) registrado aqui e em memória global.
