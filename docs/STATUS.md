@@ -46,6 +46,7 @@ React + **TypeScript** + Vite + Tailwind + **shadcn/ui** + react-router-dom. Cli
 - O projeto Supabase tem um teto de **"max rows" no PostgREST** (retorna no máx. 10000 por request, mesmo pedindo `.range()` maior) — `useQuery` da tela pagina em lotes de 1000 até esgotar. Se outra tela algum dia buscar uma tabela/view que passe de 10k linhas, lembrar desse teto (não é bug do Supabase, é config do projeto).
 
 ## Dev-log
+- 2026-08-18 — Vendas sem Faturamento: filtro Vendedor restrito a vendedores da loja física (`vw_loja_vendedores`, mesma fonte do `ComercialVendedoresTab`) + filtro Tipo (Todos/Venda/OS) no topo da tela.
 - 2026-08-18 — Aba "Vendas sem Faturamento" (`/vendas/sem-faturamento`): lista + filtros rápidos/data custom/vendedor + follow-up (CRUD) por venda, VENDA+O.S. juntos (default "Últimos 30d"), paginação da busca (teto de max-rows do PostgREST) e teto de renderização de 1000 linhas c/ aviso. Achado e corrigido timeout de performance na view (índice faltando). Ver armadilhas acima.
 - 2026-08-18 — Mapeamento profundo do código (arquitetura, dados, armadilhas) registrado aqui e em memória global.
 - 2026-08-11 — Repo clonado localmente; criado este STATUS.

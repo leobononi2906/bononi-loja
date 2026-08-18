@@ -9,6 +9,9 @@ import { SortableHeader } from "./SortableHeader";
 import { useSortable } from "@/hooks/useSortable";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/data/mockData";
+import { useShell } from "@/components/layout/AppShell";
+import { useViewData } from "@/hooks/useComercialData";
+import { buildVendedorInfo } from "@/lib/dim-vendedor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +53,13 @@ interface Followup {
 }
 
 type QuickFilter = "todos" | "7d" | "15d" | "30d" | "mais30d" | "semana_anterior" | "custom";
+type TipoFiltro = "todos" | "VENDA" | "O.S.";
+
+const TIPO_FILTROS: { value: TipoFiltro; label: string }[] = [
+  { value: "todos", label: "Todos" },
+  { value: "VENDA", label: "Venda" },
+  { value: "O.S.", label: "OS" },
+];
 
 const QUICK_FILTERS: { value: QuickFilter; label: string }[] = [
   { value: "todos", label: "Todos" },
@@ -92,12 +102,19 @@ function badgeDias(dias: number): { cls: string; label: string } {
 
 export function VendasSemFaturamentoTab() {
   const qc = useQueryClient();
+  const { filters } = useShell();
+  const [tipoFiltro, setTipoFiltro] = useState<TipoFiltro>("todos");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("30d");
   const [customInicio, setCustomInicio] = useState("");
   const [customFim, setCustomFim] = useState("");
   const [vendedorFiltro, setVendedorFiltro] = useState("todos");
   const [drawerVenda, setDrawerVenda] = useState<VendaSemFat | null>(null);
   const [usuario, setUsuario] = useState(getUsuarioNome());
+
+  // Vendedores da loja física (mesma fonte usada em ComercialVendedoresTab) — filtra o dropdown,
+  // não os dados: online/distribuição continuam aparecendo na lista, só não entram como opção de vendedor.
+  const dimVendedor = useViewData("vw_loja_vendedores", filters, 5000, { skipDate: true, skipTipoSaida: true });
+  const vendedorInfo = useMemo(() => buildVendedorInfo(dimVendedor.data), [dimVendedor.data]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["vendas_sem_faturamento"],
@@ -127,16 +144,23 @@ export function VendasSemFaturamentoTab() {
 
   const rows = useMemo(() => data ?? [], [data]);
 
+  // Dropdown só com vendedores da loja física (departamento LOJA/LOJA GONDOLA em vw_loja_vendedores)
   const vendedores = useMemo(() => {
     const map = new Map<string, string>();
     rows.forEach((r) => {
-      if (r.id_vendedor) map.set(String(r.id_vendedor), r.vendedor || `Vend. #${r.id_vendedor}`);
+      const id = String(r.id_vendedor ?? "");
+      if (id && vendedorInfo.ids.has(id)) {
+        map.set(id, vendedorInfo.names.get(id) || r.vendedor || `Vend. #${id}`);
+      }
     });
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [rows]);
+  }, [rows, vendedorInfo]);
 
   const filtered = useMemo(() => {
     let out = rows;
+    if (tipoFiltro !== "todos") {
+      out = out.filter((r) => r.tipo_doc === tipoFiltro);
+    }
     if (vendedorFiltro !== "todos") {
       out = out.filter((r) => String(r.id_vendedor) === vendedorFiltro);
     }
@@ -151,7 +175,7 @@ export function VendasSemFaturamentoTab() {
       out = out.filter((r) => r.data_venda >= customInicio && r.data_venda <= customFim);
     }
     return out;
-  }, [rows, vendedorFiltro, quickFilter, customInicio, customFim]);
+  }, [rows, tipoFiltro, vendedorFiltro, quickFilter, customInicio, customFim]);
 
   const { sorted, sort, toggle } = useSortable(
     filtered as unknown as Record<string, unknown>[],
@@ -203,6 +227,27 @@ export function VendasSemFaturamentoTab() {
       )}
 
       <div className="chart-container flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] uppercase font-semibold tracking-wider text-muted-foreground mr-1">
+            Tipo
+          </span>
+          {TIPO_FILTROS.map((t) => (
+            <button
+              key={t.value}
+              onClick={() => setTipoFiltro(t.value)}
+              className={`h-7 px-2.5 rounded-md text-[11px] font-medium border transition-colors ${
+                tipoFiltro === t.value
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-transparent text-muted-foreground border-border hover:bg-muted/60"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="w-px self-stretch bg-border hidden sm:block" />
+
         <div className="flex items-center gap-1 flex-wrap">
           {QUICK_FILTERS.map((f) => (
             <button
