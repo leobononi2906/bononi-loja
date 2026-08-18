@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Users, Wrench, ParkingCircle, Scissors, Boxes, Settings2, Tag, Gauge, X } from "lucide-react";
+import { LayoutDashboard, Users, Wrench, ParkingCircle, Scissors, Boxes, Settings2, Tag, Gauge, AlertTriangle, X } from "lucide-react";
 
 const groups = [
   {
@@ -7,6 +7,7 @@ const groups = [
     items: [
       { to: "/vendas", label: "Visão Geral", icon: LayoutDashboard, end: true },
       { to: "/vendas/vendedores", label: "Vendedores", icon: Users },
+      { to: "/vendas/sem-faturamento", label: "Sem Faturamento", icon: AlertTriangle },
     ],
   },
   {

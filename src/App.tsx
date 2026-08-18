@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import VendasVisaoGeral from "./pages/VendasVisaoGeral";
 import VendasVendedores from "./pages/VendasVendedores";
+import VendasSemFaturamento from "./pages/VendasSemFaturamento";
 import ServicosResumo from "./pages/ServicosResumo";
 import ServicosPatio from "./pages/ServicosPatio";
 import ServicosTapecaria from "./pages/ServicosTapecaria";
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/" element={<Navigate to="/vendas" replace />} />
             <Route path="/vendas" element={<VendasVisaoGeral />} />
             <Route path="/vendas/vendedores" element={<VendasVendedores />} />
+            <Route path="/vendas/sem-faturamento" element={<VendasSemFaturamento />} />
             <Route path="/servicos" element={<ServicosResumo />} />
             <Route path="/servicos/patio" element={<ServicosPatio />} />
             <Route path="/servicos/tapecaria" element={<ServicosTapecaria />} />

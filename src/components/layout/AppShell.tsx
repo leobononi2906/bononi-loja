@@ -21,6 +21,7 @@ export function useShell() {
 const ROUTE_TITLES: Record<string, { title: string; subtitle: string }> = {
   "/vendas": { title: "Vendas · Visão Geral", subtitle: "Leitura rápida da operação comercial" },
   "/vendas/vendedores": { title: "Vendas · Vendedores", subtitle: "Painel operacional por vendedor" },
+  "/vendas/sem-faturamento": { title: "Vendas · Sem Faturamento", subtitle: "Vendas concluídas ainda não faturadas" },
   "/servicos": { title: "Serviços · Resumo", subtitle: "Indicadores e fila de OS" },
   "/servicos/patio": { title: "Serviços · Pátio", subtitle: "Central operacional da oficina" },
   "/servicos/tapecaria": { title: "Serviços · Tapeçaria", subtitle: "Produção e produtividade" },
