@@ -51,11 +51,20 @@ interface Followup {
 
 type QuickFilter = "todos" | "7d" | "15d" | "30d" | "mais30d" | "semana_anterior" | "custom";
 type TipoFiltro = "todos" | "VENDA" | "O.S.";
+type StatusOsFiltro = "todas" | "F" | "A";
 
 const TIPO_FILTROS: { value: TipoFiltro; label: string }[] = [
   { value: "todos", label: "Todos" },
   { value: "VENDA", label: "Venda" },
   { value: "O.S.", label: "OS" },
+];
+
+// "Finalizada" é o andamento do serviço (status da OS) — diferente de "faturada"
+// (que é o próprio critério da lista: só entra quem NÃO faturou ainda).
+const STATUS_OS_FILTROS: { value: StatusOsFiltro; label: string }[] = [
+  { value: "todas", label: "Todas" },
+  { value: "F", label: "Finalizadas" },
+  { value: "A", label: "Abertas" },
 ];
 
 const QUICK_FILTERS: { value: QuickFilter; label: string }[] = [
@@ -100,6 +109,7 @@ function badgeDias(dias: number): { cls: string; label: string } {
 export function VendasSemFaturamentoTab() {
   const qc = useQueryClient();
   const [tipoFiltro, setTipoFiltro] = useState<TipoFiltro>("todos");
+  const [statusOsFiltro, setStatusOsFiltro] = useState<StatusOsFiltro>("todas");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("30d");
   const [customInicio, setCustomInicio] = useState("");
   const [customFim, setCustomFim] = useState("");
@@ -110,9 +120,10 @@ export function VendasSemFaturamentoTab() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["vendas_sem_faturamento"],
     queryFn: async () => {
-      // VENDA + O.S. no mesmo snapshot (~11k linhas, crescendo) — tela abre em "Últimos 30d" por padrão.
-      // O projeto tem um teto de "max rows" no PostgREST (retorna no máx. 10000 por página,
-      // mesmo pedindo range maior) — pagina até esgotar pra não truncar silenciosamente.
+      // VENDA (snapshot) + O.S. (ao vivo via vw_os_base.fl_faturada, 18/08) na mesma view — tela abre
+      // em "Últimos 30d" por padrão. O projeto tem um teto de "max rows" no PostgREST (retorna no
+      // máx. 10000 por página, mesmo pedindo range maior) — pagina até esgotar pra não truncar
+      // silenciosamente (defensivo: volume atual é baixo, ~350 linhas no total, mas pode crescer).
       const PAGE_SIZE = 1000;
       const MAX_PAGES = 50; // 50k linhas de teto de segurança
       const all: VendaSemFat[] = [];
@@ -156,6 +167,10 @@ export function VendasSemFaturamentoTab() {
     if (tipoFiltro !== "todos") {
       out = out.filter((r) => r.tipo_doc === tipoFiltro);
     }
+    if (statusOsFiltro !== "todas") {
+      // Só afeta O.S. — Venda não tem esse conceito de "andamento" aqui, sempre passa.
+      out = out.filter((r) => r.tipo_doc !== "O.S." || r.status === statusOsFiltro);
+    }
     if (vendedorFiltro !== "todos") {
       out = out.filter((r) => String(r.id_vendedor) === vendedorFiltro);
     }
@@ -170,7 +185,7 @@ export function VendasSemFaturamentoTab() {
       out = out.filter((r) => r.data_venda >= customInicio && r.data_venda <= customFim);
     }
     return out;
-  }, [rows, tipoFiltro, vendedorFiltro, quickFilter, customInicio, customFim]);
+  }, [rows, tipoFiltro, statusOsFiltro, vendedorFiltro, quickFilter, customInicio, customFim]);
 
   const { sorted, sort, toggle } = useSortable(
     filtered as unknown as Record<string, unknown>[],
@@ -240,6 +255,27 @@ export function VendasSemFaturamentoTab() {
             </button>
           ))}
         </div>
+
+        {tipoFiltro !== "VENDA" && (
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] uppercase font-semibold tracking-wider text-muted-foreground mr-1">
+              Status OS
+            </span>
+            {STATUS_OS_FILTROS.map((s) => (
+              <button
+                key={s.value}
+                onClick={() => setStatusOsFiltro(s.value)}
+                className={`h-7 px-2.5 rounded-md text-[11px] font-medium border transition-colors ${
+                  statusOsFiltro === s.value
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-transparent text-muted-foreground border-border hover:bg-muted/60"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="w-px self-stretch bg-border hidden sm:block" />
 
