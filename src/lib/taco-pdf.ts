@@ -259,6 +259,16 @@ export interface DossieItem {
   nome?: string | null;
 }
 
+// Limite do sistema de aferição (upload externo) — o dossiê final não pode passar disso
+const MAX_DOSSIE_BYTES = 10 * 1024 * 1024; // 10MB
+
+function isPdfItem(item: Pick<DossieItem, "mime" | "nome">): boolean {
+  return (
+    (item.mime || "").toLowerCase().includes("pdf") ||
+    (item.nome || "").toLowerCase().endsWith(".pdf")
+  );
+}
+
 export async function gerarDossiePdf(itens: DossieItem[]): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const [W, H] = A4;
@@ -266,39 +276,72 @@ export async function gerarDossiePdf(itens: DossieItem[]): Promise<Uint8Array> {
   const slotH = (H - margin * 3) / 2;
   const slotW = W - margin * 2;
 
+  const embedImg = async (buf: ArrayBuffer) => {
+    try {
+      return await pdf.embedJpg(buf);
+    } catch {
+      return await pdf.embedPng(buf);
+    }
+  };
+
   let page: PDFPage | null = null;
   let slot: 0 | 1 = 0;
 
-  for (const item of itens) {
+  let i = 0;
+  while (i < itens.length) {
+    const item = itens[i];
     const res = await fetch(item.url);
     if (!res.ok) throw new Error(`Falha ao baixar anexo ${item.tipo} (${res.status})`);
     const buf = await res.arrayBuffer();
 
-    const isPdf =
-      (item.mime || "").toLowerCase().includes("pdf") ||
-      (item.nome || "").toLowerCase().endsWith(".pdf");
-
-    if (isPdf) {
+    if (isPdfItem(item)) {
       const src = await PDFDocument.load(buf, { ignoreEncryption: true });
       const pages = await pdf.copyPages(src, src.getPageIndices());
       pages.forEach((p) => pdf.addPage(p));
       page = null;
       slot = 0;
+      i++;
       continue;
     }
 
-    let img;
-    try {
-      img = await pdf.embedJpg(buf);
-    } catch {
-      img = await pdf.embedPng(buf);
+    const img = await embedImg(buf);
+    const isPortrait = img.height > img.width;
+
+    // Foto em retrato (ex.: disco do tacógrafo): tenta parear com a próxima
+    // foto (também retrato) para colocar as duas lado a lado numa página só.
+    let imgB: Awaited<ReturnType<typeof embedImg>> | null = null;
+    if (isPortrait && i + 1 < itens.length && !isPdfItem(itens[i + 1])) {
+      const resB = await fetch(itens[i + 1].url);
+      if (resB.ok) {
+        const bufB = await resB.arrayBuffer();
+        const candidate = await embedImg(bufB);
+        if (candidate.height > candidate.width) imgB = candidate;
+      }
     }
 
+    if (isPortrait && imgB) {
+      const p = pdf.addPage(A4);
+      const colW = (slotW - margin) / 2;
+      const colH = H - margin * 2;
+      [img, imgB].forEach((im, idx) => {
+        const scale = Math.min(colW / im.width, colH / im.height, 1.5);
+        const w = im.width * scale;
+        const h = im.height * scale;
+        const x = margin + idx * (colW + margin) + (colW - w) / 2;
+        const y = margin + (colH - h) / 2;
+        p.drawImage(im, { x, y, width: w, height: h });
+      });
+      page = null;
+      slot = 0;
+      i += 2;
+      continue;
+    }
+
+    // Layout padrão: empilhado, 2 fotos por página
     if (!page) {
       page = pdf.addPage(A4);
       slot = 0;
     }
-
     const scale = Math.min(slotW / img.width, slotH / img.height, 1.5);
     const w = img.width * scale;
     const h = img.height * scale;
@@ -309,9 +352,17 @@ export async function gerarDossiePdf(itens: DossieItem[]): Promise<Uint8Array> {
 
     if (slot === 0) slot = 1;
     else page = null;
+    i++;
   }
 
-  return pdf.save();
+  const bytes = await pdf.save();
+  if (bytes.byteLength > MAX_DOSSIE_BYTES) {
+    const mb = (bytes.byteLength / (1024 * 1024)).toFixed(1);
+    throw new Error(
+      `O dossiê ficou com ${mb}MB (o limite é 10MB). Substitua o CRLV/comprovante por um arquivo em PDF menor ou por uma foto.`
+    );
+  }
+  return bytes;
 }
 
 // ─── ABRIR / BAIXAR PDF ───────────────────────────────────────────────────

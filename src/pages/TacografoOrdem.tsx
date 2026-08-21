@@ -272,11 +272,17 @@ export default function TacografoOrdem() {
   };
 
   // ─── Upload de anexo ───
+  const MAX_PDF_ANEXO_MB = 8; // PDF não é recomprimido — cabe cru no dossiê (teto final 10MB)
+
   const enviarArquivo = async (tipo: TacoAnexoTipo, file: File) => {
     if (!ordem) return;
+    const isImg = file.type.startsWith("image/");
+    if (!isImg && file.size > MAX_PDF_ANEXO_MB * 1024 * 1024) {
+      toast.error(`PDF muito grande (limite ${MAX_PDF_ANEXO_MB}MB). Envie uma versão menor ou uma foto do documento.`);
+      return;
+    }
     setUploading(tipo);
     try {
-      const isImg = file.type.startsWith("image/");
       const blob = isImg ? await comprimirImagem(file) : file;
       const ext = isImg ? "jpg" : (file.name.split(".").pop() || "pdf").toLowerCase();
       const path = `os_${ordem.id}/${tipo}_${Date.now()}.${ext}`;
@@ -441,7 +447,7 @@ export default function TacografoOrdem() {
       });
     } catch (err) {
       tacoLog("ERRO", "ERRO_GERAR_DOSSIE", { erro: err as Error, id_entidade: id });
-      toast.error("Erro ao gerar o dossiê. Verifique os anexos.");
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar o dossiê. Verifique os anexos.");
     } finally {
       setGerandoDossie(false);
     }
