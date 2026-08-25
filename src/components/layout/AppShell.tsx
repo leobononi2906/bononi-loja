@@ -27,6 +27,10 @@ const ROUTE_TITLES: Record<string, { title: string; subtitle: string }> = {
   "/servicos/tapecaria": { title: "Serviços · Tapeçaria", subtitle: "Produção e produtividade" },
   "/servicos/config-colaboradores": { title: "Config. Colaboradores", subtitle: "Defina o setor de cada colaborador" },
   "/gondola": { title: "Gôndola · Etiquetas", subtitle: "Gestão de preços na gôndola" },
+  "/gestao-servicos/distribuicao": { title: "Gestão de Serviços · Lista de Distribuição", subtitle: "Distribua serviços por área e colaborador" },
+  "/gestao-servicos/painel": { title: "Gestão de Serviços · Painel do Gestor", subtitle: "Disponibilidade por área e fila de serviços" },
+  "/gestao-servicos/precificacao": { title: "Gestão de Serviços · Precificação", subtitle: "Conferência dos serviços finalizados" },
+  "/gestao-servicos/areas": { title: "Gestão de Serviços · Config. Áreas", subtitle: "Áreas de destino da distribuição" },
 };
 
 export function AppShell() {

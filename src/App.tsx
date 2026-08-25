@@ -14,6 +14,10 @@ import ConfigColaboradores from "./pages/ConfigColaboradores";
 import GondolaLoja from "./pages/GondolaLoja";
 import TacografoLista from "./pages/TacografoLista";
 import TacografoOrdem from "./pages/TacografoOrdem";
+import GestaoDistribuicao from "./pages/GestaoDistribuicao";
+import GestaoPainel from "./pages/GestaoPainel";
+import GestaoPrecificacao from "./pages/GestaoPrecificacao";
+import GestaoAreas from "./pages/GestaoAreas";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +42,10 @@ const App = () => (
             <Route path="/tacografo" element={<TacografoLista />} />
             <Route path="/tacografo/nova" element={<TacografoOrdem />} />
             <Route path="/tacografo/:id" element={<TacografoOrdem />} />
+            <Route path="/gestao-servicos/distribuicao" element={<GestaoDistribuicao />} />
+            <Route path="/gestao-servicos/painel" element={<GestaoPainel />} />
+            <Route path="/gestao-servicos/precificacao" element={<GestaoPrecificacao />} />
+            <Route path="/gestao-servicos/areas" element={<GestaoAreas />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
