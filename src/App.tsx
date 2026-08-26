@@ -14,6 +14,7 @@ import ConfigColaboradores from "./pages/ConfigColaboradores";
 import GondolaLoja from "./pages/GondolaLoja";
 import TacografoLista from "./pages/TacografoLista";
 import TacografoOrdem from "./pages/TacografoOrdem";
+import TacografoVencimentos from "./pages/TacografoVencimentos";
 import GestaoDistribuicao from "./pages/GestaoDistribuicao";
 import GestaoPainel from "./pages/GestaoPainel";
 import GestaoPrecificacao from "./pages/GestaoPrecificacao";
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="/tacografo" element={<TacografoLista />} />
             <Route path="/tacografo/nova" element={<TacografoOrdem />} />
             <Route path="/tacografo/:id" element={<TacografoOrdem />} />
+            <Route path="/tacografo-vencimentos" element={<TacografoVencimentos />} />
             <Route path="/gestao-servicos/distribuicao" element={<GestaoDistribuicao />} />
             <Route path="/gestao-servicos/painel" element={<GestaoPainel />} />
             <Route path="/gestao-servicos/precificacao" element={<GestaoPrecificacao />} />

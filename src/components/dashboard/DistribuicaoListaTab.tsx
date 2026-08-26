@@ -34,19 +34,22 @@ interface DialogState {
   row: DistServicoRow;
 }
 
-const STATUS_CHIPS: { value: StatusDistServico; label: string }[] = [
-  { value: "aberto", label: "Aberto" },
-  { value: "distribuido", label: "Distribuído" },
-  { value: "em_servico", label: "Em serviço" },
-  { value: "parado", label: "Parado" },
-  { value: "cancelado", label: "Cancelado" },
+// Aberto e Distribuído viram um chip só (pedido do Leo 26/08) — pra quem olha
+// a fila não importa se já tem colaborador destinado, só se ainda não começou.
+type StatusChipValue = "aberto_distribuido" | "em_servico" | "parado" | "cancelado";
+
+const STATUS_CHIPS: { value: StatusChipValue; label: string; statuses: StatusDistServico[]; badgeClass: string }[] = [
+  { value: "aberto_distribuido", label: "Aberto/Distribuído", statuses: ["aberto", "distribuido"], badgeClass: "b-badge-info" },
+  { value: "em_servico", label: "Em serviço", statuses: ["em_servico"], badgeClass: STATUS_INFO.em_servico.badgeClass },
+  { value: "parado", label: "Parado", statuses: ["parado"], badgeClass: STATUS_INFO.parado.badgeClass },
+  { value: "cancelado", label: "Cancelado", statuses: ["cancelado"], badgeClass: STATUS_INFO.cancelado.badgeClass },
 ];
 
 export function DistribuicaoListaTab() {
   const qc = useQueryClient();
-  // null = padrão (mostra os 4 ativos); clicar num chip filtra SÓ aquele status
+  // null = padrão (mostra os 4 ativos); clicar num chip filtra SÓ aquele grupo
   // (clique de novo no mesmo chip volta ao padrão).
-  const [statusFiltro, setStatusFiltro] = useState<StatusDistServico | null>(null);
+  const [statusFiltro, setStatusFiltro] = useState<StatusChipValue | null>(null);
   const [areaFiltro, setAreaFiltro] = useState<string>("TODOS");
   const [colabFiltro, setColabFiltro] = useState<string>("TODOS");
   const [busca, setBusca] = useState("");
@@ -176,7 +179,10 @@ export function DistribuicaoListaTab() {
     (idsDistAtivos.length > 0 && loadingOcupados);
 
   const filtradas = servicosEnriquecidos.filter((l) => {
-    if (statusFiltro ? l.status !== statusFiltro : !STATUS_ATIVOS.includes(l.status)) return false;
+    if (statusFiltro) {
+      const chip = STATUS_CHIPS.find((c) => c.value === statusFiltro);
+      if (!chip || !chip.statuses.includes(l.status)) return false;
+    } else if (!STATUS_ATIVOS.includes(l.status)) return false;
     if (areaFiltro === "SEM_AREA" && l.id_area != null) return false;
     if (areaFiltro !== "TODOS" && areaFiltro !== "SEM_AREA" && String(l.id_area ?? "") !== areaFiltro) return false;
     if (colabFiltro !== "TODOS") {
@@ -201,7 +207,7 @@ export function DistribuicaoListaTab() {
 
   const { sorted, sort, toggle } = useSortable(filtradas, "dataHora", "desc");
 
-  function clicarStatus(s: StatusDistServico) {
+  function clicarStatus(s: StatusChipValue) {
     setStatusFiltro((prev) => (prev === s ? null : s));
   }
 
@@ -243,19 +249,19 @@ export function DistribuicaoListaTab() {
         </Button>
       </div>
 
-      {/* Filtro de status — chips clicáveis. Sem nada selecionado: mostra os 4 ativos
-          (Cancelado fica de fora). Clicar num chip filtra SÓ aquele status; clicar de
-          novo no mesmo volta ao padrão. */}
+      {/* Filtro de status — chips clicáveis. Sem nada selecionado: mostra os ativos
+          (Cancelado fica de fora). Clicar num chip filtra SÓ aquele grupo; clicar de
+          novo no mesmo volta ao padrão. Aberto e Distribuído são o mesmo chip (26/08). */}
       <div className="flex flex-wrap items-center gap-1.5">
         {STATUS_CHIPS.map((s) => {
           const selecionado = statusFiltro === s.value;
-          const ativo = statusFiltro ? selecionado : STATUS_ATIVOS.includes(s.value);
+          const ativo = statusFiltro ? selecionado : s.statuses.some((st) => STATUS_ATIVOS.includes(st));
           return (
             <button
               key={s.value}
               onClick={() => clicarStatus(s.value)}
-              className={`b-badge ${STATUS_INFO[s.value].badgeClass} cursor-pointer transition-opacity ${ativo ? "" : "opacity-30 hover:opacity-70"} ${selecionado ? "ring-2 ring-offset-1 ring-primary" : ""}`}
-              title={selecionado ? "Clique pra voltar aos 4 ativos" : `Clique pra ver só ${s.label}`}
+              className={`b-badge ${s.badgeClass} cursor-pointer transition-opacity ${ativo ? "" : "opacity-30 hover:opacity-70"} ${selecionado ? "ring-2 ring-offset-1 ring-primary" : ""}`}
+              title={selecionado ? "Clique pra voltar ao padrão" : `Clique pra ver só ${s.label}`}
             >
               {s.label}
             </button>

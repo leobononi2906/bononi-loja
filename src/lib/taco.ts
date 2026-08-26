@@ -198,3 +198,55 @@ export function fmtData(iso: string | null | undefined): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("pt-BR");
 }
+
+// ─── VENCIMENTOS DE TACÓGRAFO (avisos de renovação por WhatsApp) ─────────
+// Fundação de dados publicada pelo cérebro (26/08) — disparo roda no backend
+// (edge/cron), esta tela é só o painel de acompanhamento. Não é escopado por
+// empresa (diferente de Gestão de Serviços).
+export interface TacoVencVeiculoItem {
+  placa: string;
+  veiculo: string;
+  data_vencimento: string;
+  dias: number;
+}
+
+export interface TacoVencPendenteRow {
+  telefone_norm: string;
+  cliente_nome: string;
+  proximo_venc: string;
+  dias_proximo: number;
+  qtd_ate_30d: number;
+  veiculos: TacoVencVeiculoItem[];
+  ultimo_envio_status: string | null;
+  ultimo_envio_em: string | null;
+}
+
+export interface TacoVencEnviadoRow {
+  id: number;
+  telefone_norm: string;
+  cliente_nome: string;
+  itens: { placa: string; veiculo?: string; data_vencimento?: string }[];
+  qtd_veiculos: number;
+  status: string;
+  mensagem: string | null;
+  enviado_em: string | null;
+  erro: string | null;
+  criado_por: string | null;
+  criado_em: string;
+}
+
+// "5544998242279" -> "55 44 99824-2279"
+export function fmtTelefoneVenc(tel: string | null | undefined): string {
+  if (!tel) return "—";
+  const d = tel.replace(/\D/g, "");
+  if (d.length === 13) return `${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4, 9)}-${d.slice(9, 13)}`;
+  if (d.length === 12) return `${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4, 8)}-${d.slice(8, 12)}`;
+  return tel;
+}
+
+// <=7 dias = vermelho (urgente), <=15 = amarelo (atenção)
+export function diasBadgeClass(dias: number): string {
+  if (dias <= 7) return "b-badge-ruptura";
+  if (dias <= 15) return "b-badge-critico";
+  return "b-badge-muted";
+}
