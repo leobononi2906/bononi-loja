@@ -55,9 +55,9 @@ export function PainelGestorTab() {
   const { data: apontamentosColab, isLoading: loadingApontColab } = useQuery({
     queryKey: ["vw_fb_os_apontamento_colabs", idsSemColab],
     queryFn: async () => {
-      const { data, error } = await db.from("vw_fb_os_apontamento").select("id_servico, colaborador").in("id_servico", idsSemColab);
+      const { data, error } = await db.from("vw_fb_os_apontamento").select("id_servico, id_colaborador, colaborador").in("id_servico", idsSemColab);
       if (error) throw error;
-      return (data ?? []) as { id_servico: number; colaborador: string | null }[];
+      return (data ?? []) as { id_servico: number; id_colaborador: number; colaborador: string | null }[];
     },
     enabled: idsSemColab.length > 0,
   });
@@ -73,7 +73,50 @@ export function PainelGestorTab() {
     return map;
   }, [apontamentosColab]);
 
-  const isLoading = loadingAreas || loadingServicos || loadingColabArea || (idsSemColab.length > 0 && loadingApontColab);
+  // Ids de dist_servico "em serviço" já com distribuição manual — usados pra
+  // achar o prisma do que cada colaborador tá trabalhando agora.
+  const idsEmServicoComDist = useMemo(
+    () => servicosList.filter((s) => s.status === "em_servico" && s.id_dist != null).map((s) => s.id_dist as number),
+    [servicosList]
+  );
+
+  const { data: colabsEmServicoManual, isLoading: loadingColabsEmServico } = useQuery({
+    queryKey: ["dist_servico_colaborador_em_servico", idsEmServicoComDist],
+    queryFn: async () => {
+      const { data, error } = await db.from("dist_servico_colaborador").select("id_colaborador, id_dist_servico").in("id_dist_servico", idsEmServicoComDist);
+      if (error) throw error;
+      return (data ?? []) as { id_colaborador: number; id_dist_servico: number }[];
+    },
+    enabled: idsEmServicoComDist.length > 0,
+  });
+
+  // id_colaborador -> prisma do serviço em serviço que ele tá fazendo agora
+  // (manual, via dist_servico_colaborador, ou via apontamento quando nunca
+  // foi destinado por aqui) — mesma lógica de "ocupado" do popup da Lista.
+  const colabIdParaPrisma = useMemo(() => {
+    const prismaPorIdDist = new Map<number, string>();
+    const prismaPorIdServico = new Map<number, string>();
+    servicosList.forEach((s) => {
+      if (s.status !== "em_servico" || !s.prisma) return;
+      if (s.id_dist != null) prismaPorIdDist.set(s.id_dist, s.prisma);
+      prismaPorIdServico.set(s.id_servico, s.prisma);
+    });
+    const map = new Map<number, string>();
+    (colabsEmServicoManual ?? []).forEach((c) => {
+      const prisma = prismaPorIdDist.get(c.id_dist_servico);
+      if (prisma) map.set(c.id_colaborador, prisma);
+    });
+    (apontamentosColab ?? []).forEach((a) => {
+      const prisma = prismaPorIdServico.get(a.id_servico);
+      if (prisma) map.set(a.id_colaborador, prisma);
+    });
+    return map;
+  }, [servicosList, colabsEmServicoManual, apontamentosColab]);
+
+  const isLoading =
+    loadingAreas || loadingServicos || loadingColabArea ||
+    (idsSemColab.length > 0 && loadingApontColab) ||
+    (idsEmServicoComDist.length > 0 && loadingColabsEmServico);
   const areasList = Array.isArray(areas) ? areas : [];
   const colabAreaList = Array.isArray(colabArea) ? colabArea : [];
 
@@ -190,12 +233,19 @@ export function PainelGestorTab() {
                   <span className="b-badge b-badge-info">{colabs.length}</span>
                 </h4>
                 <div className="space-y-0.5">
-                  {colabs.map((c) => (
-                    <div key={c.id_colaborador} className="flex items-center justify-between py-1 px-2 rounded-md hover:bg-muted/40">
-                      <span className="text-xs font-medium">{c.colaborador}</span>
-                      <span className={`b-badge ${c.situacao === "A" ? "b-badge-ok" : "b-badge-muted"}`}>{c.situacao === "A" ? "Ativo" : c.situacao}</span>
-                    </div>
-                  ))}
+                  {colabs.map((c) => {
+                    const prisma = colabIdParaPrisma.get(c.id_colaborador);
+                    return (
+                      <div key={c.id_colaborador} className="flex items-center justify-between py-1 px-2 rounded-md hover:bg-muted/40">
+                        <span className="text-xs font-medium">{c.colaborador}</span>
+                        {prisma ? (
+                          <span className="b-badge b-badge-critico" title="Em serviço agora">Prisma {prisma}</span>
+                        ) : (
+                          <span className={`b-badge ${c.situacao === "A" ? "b-badge-ok" : "b-badge-muted"}`}>{c.situacao === "A" ? "Ativo" : c.situacao}</span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
