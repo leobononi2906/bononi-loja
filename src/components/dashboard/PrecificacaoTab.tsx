@@ -89,8 +89,6 @@ export function PrecificacaoTab() {
               <th>Placa</th>
               <th>Modelo</th>
               <th>Serviço</th>
-              <th>Área</th>
-              <th>Colaborador(es)</th>
               <th>Horas apont.</th>
               <th>Ação</th>
             </tr>
@@ -112,7 +110,7 @@ export function PrecificacaoTab() {
             })}
             {lista.length === 0 && (
               <tr>
-                <td colSpan={12} className="py-10 text-center">
+                <td colSpan={10} className="py-10 text-center">
                   <PackageOpen className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
                   <p className="text-xs text-muted-foreground">Nenhum serviço pendente de validação.</p>
                 </td>
@@ -171,8 +169,6 @@ function ExpansibleRow({
         <td className="text-xs font-mono whitespace-nowrap">{row.placa ?? "—"}</td>
         <td className="text-xs min-w-0 max-w-[140px] truncate" title={row.modelo ?? ""}>{row.modelo ?? "—"}</td>
         <td className="text-xs min-w-0 max-w-[180px] truncate" title={row.servico}>{row.servico}</td>
-        <td className="text-xs whitespace-nowrap">{row.area ?? "—"}</td>
-        <td className="text-xs min-w-0 max-w-[160px] truncate" title={row.colaboradores ?? ""}>{row.colaboradores || "—"}</td>
         <td className="text-xs font-mono">{fmtHoras(row.horas_apontadas)}</td>
         <td>
           <Button size="sm" className="h-7 px-2 text-[11px]" onClick={onValidar} disabled={validando}>
@@ -182,7 +178,7 @@ function ExpansibleRow({
       </tr>
       {aberta && (
         <tr>
-          <td colSpan={12} className="bg-muted/20 text-xs px-4 py-2">
+          <td colSpan={10} className="bg-muted/20 text-xs px-4 py-2">
             {limparObservacao(row.observacao) && <p className="mb-2"><span className="font-semibold text-muted-foreground">Observação: </span>{limparObservacao(row.observacao)}</p>}
             {isLoading ? (
               <p className="text-muted-foreground">Carregando apontamentos...</p>
