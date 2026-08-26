@@ -44,7 +44,9 @@ const STATUS_CHIPS: { value: StatusDistServico; label: string }[] = [
 
 export function DistribuicaoListaTab() {
   const qc = useQueryClient();
-  const [statusAtivos, setStatusAtivos] = useState<Set<StatusDistServico>>(new Set(STATUS_ATIVOS));
+  // null = padrão (mostra os 4 ativos); clicar num chip filtra SÓ aquele status
+  // (clique de novo no mesmo chip volta ao padrão).
+  const [statusFiltro, setStatusFiltro] = useState<StatusDistServico | null>(null);
   const [areaFiltro, setAreaFiltro] = useState<string>("TODOS");
   const [colabFiltro, setColabFiltro] = useState<string>("TODOS");
   const [busca, setBusca] = useState("");
@@ -136,7 +138,7 @@ export function DistribuicaoListaTab() {
   const isLoading = loadingAreas || loadingColabs || loadingServicos || (idsSemColab.length > 0 && loadingApontColab);
 
   const filtradas = servicosEnriquecidos.filter((l) => {
-    if (!statusAtivos.has(l.status)) return false;
+    if (statusFiltro ? l.status !== statusFiltro : !STATUS_ATIVOS.includes(l.status)) return false;
     if (areaFiltro === "SEM_AREA" && l.id_area != null) return false;
     if (areaFiltro !== "TODOS" && areaFiltro !== "SEM_AREA" && String(l.id_area ?? "") !== areaFiltro) return false;
     if (colabFiltro !== "TODOS") {
@@ -161,12 +163,8 @@ export function DistribuicaoListaTab() {
 
   const { sorted, sort, toggle } = useSortable(filtradas, "dataHora", "desc");
 
-  function toggleStatus(s: StatusDistServico) {
-    setStatusAtivos((prev) => {
-      const next = new Set(prev);
-      if (next.has(s)) next.delete(s); else next.add(s);
-      return next;
-    });
+  function clicarStatus(s: StatusDistServico) {
+    setStatusFiltro((prev) => (prev === s ? null : s));
   }
 
   async function toggleParado(row: DistServicoRow) {
@@ -202,16 +200,19 @@ export function DistribuicaoListaTab() {
         </div>
       </div>
 
-      {/* Filtro de status — chips clicáveis (default: os 4 ativos; Cancelado só quando clicado) */}
+      {/* Filtro de status — chips clicáveis. Sem nada selecionado: mostra os 4 ativos
+          (Cancelado fica de fora). Clicar num chip filtra SÓ aquele status; clicar de
+          novo no mesmo volta ao padrão. */}
       <div className="flex flex-wrap items-center gap-1.5">
         {STATUS_CHIPS.map((s) => {
-          const ativo = statusAtivos.has(s.value);
+          const selecionado = statusFiltro === s.value;
+          const ativo = statusFiltro ? selecionado : STATUS_ATIVOS.includes(s.value);
           return (
             <button
               key={s.value}
-              onClick={() => toggleStatus(s.value)}
-              className={`b-badge ${STATUS_INFO[s.value].badgeClass} cursor-pointer transition-opacity ${ativo ? "" : "opacity-30 hover:opacity-70"}`}
-              title={ativo ? "Clique pra esconder" : "Clique pra mostrar"}
+              onClick={() => clicarStatus(s.value)}
+              className={`b-badge ${STATUS_INFO[s.value].badgeClass} cursor-pointer transition-opacity ${ativo ? "" : "opacity-30 hover:opacity-70"} ${selecionado ? "ring-2 ring-offset-1 ring-primary" : ""}`}
+              title={selecionado ? "Clique pra voltar aos 4 ativos" : `Clique pra ver só ${s.label}`}
             >
               {s.label}
             </button>

@@ -4,7 +4,7 @@ import { LayoutGrid, PackageOpen, Users } from "lucide-react";
 import { TableSkeleton } from "./LoadingSkeleton";
 import { ErrorAlert } from "./ErrorAlert";
 import {
-  db, STATUS_INFO, STATUS_ATIVOS,
+  db, STATUS_INFO, STATUS_ATIVOS, fmtDataAbrev, limparObservacao,
   type DistArea, type DistServicoRow, type DistColabAreaRow,
 } from "@/lib/dist";
 
@@ -36,22 +36,53 @@ export function PainelGestorTab() {
     },
   });
 
-  const isLoading = loadingAreas || loadingServicos || loadingColabArea;
-  const areasList = Array.isArray(areas) ? areas : [];
   const servicosList = Array.isArray(servicos) ? servicos : [];
+
+  // Serviço "em serviço" pode nunca ter sido destinado por aqui — busca o
+  // colaborador do apontamento do legado como fallback (mesma lógica da Lista
+  // de Distribuição), pra mostrar quem está mexendo em vez do status genérico.
+  const idsSemColab = useMemo(
+    () => servicosList.filter((s) => s.fl_apontado === 1 && !s.colaboradores).map((s) => s.id_servico),
+    [servicosList]
+  );
+
+  const { data: apontamentosColab, isLoading: loadingApontColab } = useQuery({
+    queryKey: ["vw_fb_os_apontamento_colabs", idsSemColab],
+    queryFn: async () => {
+      const { data, error } = await db.from("vw_fb_os_apontamento").select("id_servico, colaborador").in("id_servico", idsSemColab);
+      if (error) throw error;
+      return (data ?? []) as { id_servico: number; colaborador: string | null }[];
+    },
+    enabled: idsSemColab.length > 0,
+  });
+
+  const colabsApontamentoMap = useMemo(() => {
+    const map = new Map<number, string>();
+    (apontamentosColab ?? []).forEach((a) => {
+      if (!a.colaborador) return;
+      const nomes = new Set((map.get(a.id_servico) ?? "").split(", ").filter(Boolean));
+      nomes.add(a.colaborador);
+      map.set(a.id_servico, Array.from(nomes).sort().join(", "));
+    });
+    return map;
+  }, [apontamentosColab]);
+
+  const isLoading = loadingAreas || loadingServicos || loadingColabArea || (idsSemColab.length > 0 && loadingApontColab);
+  const areasList = Array.isArray(areas) ? areas : [];
   const colabAreaList = Array.isArray(colabArea) ? colabArea : [];
 
   const filaPorArea = useMemo(() => {
     const grupos = new Map<string, DistServicoRow[]>();
     servicosList.forEach((s) => {
       if (!STATUS_ATIVOS.includes(s.status)) return;
+      const colaboradores = s.colaboradores || colabsApontamentoMap.get(s.id_servico) || null;
       const chave = s.area ?? "Sem área";
       const arr = grupos.get(chave) ?? [];
-      arr.push(s);
+      arr.push({ ...s, colaboradores });
       grupos.set(chave, arr);
     });
     return grupos;
-  }, [servicosList]);
+  }, [servicosList, colabsApontamentoMap]);
 
   const colabsPorArea = useMemo(() => {
     const grupos = new Map<string, DistColabAreaRow[]>();
@@ -94,17 +125,24 @@ export function PainelGestorTab() {
                 {itens.length === 0 ? (
                   <p className="text-xs text-muted-foreground py-3 text-center">Fila vazia.</p>
                 ) : (
-                  <div className="space-y-1 max-h-64 overflow-y-auto">
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto">
                     {itens.map((s) => {
                       const info = STATUS_INFO[s.status];
+                      const obs = limparObservacao(s.observacao);
                       return (
-                        <div key={s.id_dist ?? -s.id_servico} className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/40 text-xs gap-2">
-                          <div className="min-w-0">
-                            <span className="font-mono">OS {s.id_os}</span>
-                            <span className="text-muted-foreground ml-2 truncate">{s.servico}</span>
-                            {s.colaboradores && <span className="text-muted-foreground/70 ml-1">— {s.colaboradores}</span>}
+                        <div key={s.id_dist ?? -s.id_servico} className="py-1.5 px-2 rounded-md hover:bg-muted/40 text-xs border-b last:border-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-muted-foreground">
+                              {s.prisma ? `Prisma ${s.prisma}` : `OS ${s.id_os}`} · {fmtDataAbrev(s.data_os)} {s.hora_os ?? ""}
+                            </span>
+                            {s.colaboradores ? (
+                              <span className="font-medium shrink-0 truncate max-w-[45%]" title={s.colaboradores}>{s.colaboradores}</span>
+                            ) : (
+                              <span className={`b-badge ${info.badgeClass} shrink-0`}>{info.label}</span>
+                            )}
                           </div>
-                          <span className={`b-badge ${info.badgeClass} shrink-0`}>{info.label}</span>
+                          <div className="font-medium truncate" title={s.servico}>{s.servico}</div>
+                          {obs && <div className="text-muted-foreground line-clamp-2 mt-0.5">{obs}</div>}
                         </div>
                       );
                     })}
