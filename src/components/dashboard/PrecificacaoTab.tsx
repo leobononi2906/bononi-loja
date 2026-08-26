@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { TableSkeleton } from "./LoadingSkeleton";
 import { ErrorAlert } from "./ErrorAlert";
 import {
-  db, distLog, getUsuarioNome, setUsuarioNome, fmtDataAbrev, limparObservacao, EMPRESA_MLB_PR,
+  db, distLog, getUsuarioNome, setUsuarioNome, fmtDataAbrev, fmtHoras, limparObservacao, EMPRESA_MLB_PR,
   type DistPrecificacaoRow, type ApontamentoOS,
 } from "@/lib/dist";
 
@@ -173,7 +173,7 @@ function ExpansibleRow({
         <td className="text-xs min-w-0 max-w-[180px] truncate" title={row.servico}>{row.servico}</td>
         <td className="text-xs whitespace-nowrap">{row.area ?? "—"}</td>
         <td className="text-xs min-w-0 max-w-[160px] truncate" title={row.colaboradores ?? ""}>{row.colaboradores || "—"}</td>
-        <td className="text-xs font-mono">{row.horas_apontadas != null ? row.horas_apontadas.toFixed(1) + "h" : "—"}</td>
+        <td className="text-xs font-mono">{fmtHoras(row.horas_apontadas)}</td>
         <td>
           <Button size="sm" className="h-7 px-2 text-[11px]" onClick={onValidar} disabled={validando}>
             <CheckCircle2 className="h-3 w-3 mr-1" /> {validando ? "Validando..." : "Validar"}
@@ -206,7 +206,7 @@ function ExpansibleRow({
                       <td className="py-0.5 font-mono">{fmtDataAbrev(a.data_apont)}</td>
                       <td className="py-0.5 font-mono">{a.hora_inicio}</td>
                       <td className="py-0.5 font-mono">{a.hora_termino ?? "—"}</td>
-                      <td className="py-0.5 font-mono">{a.horas.toFixed(2)}h</td>
+                      <td className="py-0.5 font-mono">{fmtHoras(a.horas)}</td>
                     </tr>
                   ))}
                 </tbody>

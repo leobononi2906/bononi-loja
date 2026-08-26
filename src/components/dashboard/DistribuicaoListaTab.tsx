@@ -417,7 +417,7 @@ export function DistribuicaoListaTab() {
       {osAberta && (
         <OsServicosDialog
           idOs={osAberta.id_os}
-          servicos={servicosEnriquecidos.filter((s) => s.id_os === osAberta.id_os && s.id_empresa === osAberta.id_empresa)}
+          servicos={servicosEnriquecidos.filter((s) => s.id_os === osAberta.id_os && s.id_empresa === osAberta.id_empresa && s.status !== "cancelado")}
           onClose={() => setOsAberta(null)}
         />
       )}

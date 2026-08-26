@@ -188,6 +188,17 @@ export function fmtDataAbrev(dateStr: string | null | undefined): string {
   return `${d}/${m}`;
 }
 
+// Horas decimais (2.5) não são legíveis pra quem não é de tecnologia — pedido do
+// Leo 26/08: mostrar "2h30" em vez de "2.5h".
+export function fmtHoras(horasDecimais: number | null | undefined): string {
+  if (horasDecimais == null) return "—";
+  const totalMin = Math.round(horasDecimais * 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0) return `${m}min`;
+  return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, "0")}`;
+}
+
 // TBL_SERVICO.DESCRICAO é o campo certo (confirmado 26/08 lendo direto da produção,
 // só leitura, via node-firebird em bononi-replicador) — é RTF puro salvo pelo
 // sistema antigo, tipo:
