@@ -221,6 +221,48 @@ export interface TacoVencPendenteRow {
   ultimo_envio_em: string | null;
 }
 
+// vw_taco_venc_backlog — mesma cara da pendentes, mas dias_proximo é NEGATIVO
+// (já vencido) e esses clientes NÃO aparecem em vw_taco_venc_pendentes.
+export interface TacoVencBacklogRow {
+  telefone_norm: string;
+  cliente_nome: string;
+  proximo_venc: string;
+  dias_proximo: number;
+  qtd_veic: number;
+  veiculos: TacoVencVeiculoItem[];
+  ultimo_envio_status: string | null;
+  ultimo_envio_em: string | null;
+}
+
+// Formato comum pra renderizar pendentes e backlog na mesma tabela.
+export interface ClienteVencRow {
+  telefone_norm: string;
+  cliente_nome: string;
+  proximo_venc: string;
+  dias_proximo: number;
+  qtd: number;
+  veiculos: TacoVencVeiculoItem[];
+  ultimo_envio_status: string | null;
+  ultimo_envio_em: string | null;
+}
+
+export interface TacoVencSemTelefoneVeiculo {
+  id: number;
+  placa: string | null;
+  veiculo: string;
+  telefone_raw: string | null;
+  data_vencimento: string;
+}
+
+export interface TacoVencSemTelefoneRow {
+  chave_cliente: string;
+  cliente_nome: string;
+  proximo_venc: string;
+  dias_proximo: number;
+  qtd_ate_30d: number;
+  veiculos: TacoVencSemTelefoneVeiculo[];
+}
+
 export interface TacoVencEnviadoRow {
   id: number;
   telefone_norm: string;
@@ -249,4 +291,24 @@ export function diasBadgeClass(dias: number): string {
   if (dias <= 7) return "b-badge-ruptura";
   if (dias <= 15) return "b-badge-critico";
   return "b-badge-muted";
+}
+
+// dias negativo (backlog/vencido) sempre vermelho; positivo segue a régua normal.
+export function diasVencInfo(dias: number): { label: string; badgeClass: string } {
+  if (dias < 0) return { label: `${Math.abs(dias)}d vencido`, badgeClass: "b-badge-ruptura" };
+  return { label: `${dias}d`, badgeClass: diasBadgeClass(dias) };
+}
+
+// Normalização de telefone BR pro padrão da Umbler — só dígitos, tira o 0 do
+// DDD, prefixa 55; celular = 11 dígitos locais com "9" na 3ª posição.
+// Ex: "044 99840-4219" -> { telefone_norm: "5544998404219", is_celular: true }
+export function normalizarTelefoneBR(raw: string): { telefone_norm: string; is_celular: boolean } {
+  let d = (raw || "").replace(/\D/g, "");
+  if (!(d.startsWith("55") && d.length >= 12)) {
+    if (d.length >= 10 && d.startsWith("0")) d = d.slice(1);
+    d = `55${d}`;
+  }
+  const semPais = d.slice(2);
+  const isCelular = semPais.length === 11 && semPais[2] === "9";
+  return { telefone_norm: d, is_celular: isCelular };
 }
