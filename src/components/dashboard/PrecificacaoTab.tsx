@@ -139,7 +139,16 @@ function ExpansibleRow({
     queryFn: async () => {
       const { data, error } = await db.from("vw_fb_os_apontamento").select("*").eq("id_servico", row.id_servico).order("data_apont", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as ApontamentoOS[];
+      // A view às vezes traz apontamento duplicado (mesmo id_colaborador/data/hora,
+      // id_apontamento diferente) — raro (~2% dos casos), mas sem isso a lista mostra
+      // a mesma linha 2x. Dedupe pela combinação que identifica o apontamento real.
+      const vistos = new Set<string>();
+      return ((data ?? []) as ApontamentoOS[]).filter((a) => {
+        const chave = `${a.id_colaborador}|${a.data_apont}|${a.hora_inicio}|${a.hora_termino}`;
+        if (vistos.has(chave)) return false;
+        vistos.add(chave);
+        return true;
+      });
     },
     enabled: aberta,
   });

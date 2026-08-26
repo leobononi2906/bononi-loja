@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ClipboardList, Copy, PauseCircle, PlayCircle, Pencil, PackageOpen, ChevronDown, ChevronRight,
+  ClipboardList, Copy, PauseCircle, PlayCircle, Pencil, PackageOpen, ChevronDown, ChevronRight, Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,7 @@ import { useSortable } from "@/hooks/useSortable";
 import {
   db, distLog, getUsuarioNome, setUsuarioNome, fmtDataAbrev, limparObservacao,
   STATUS_INFO, STATUS_ATIVOS, EMPRESA_MLB_PR,
-  type DistArea, type DistServicoRow, type ColaboradorDim, type StatusDistServico,
+  type DistArea, type DistServicoRow, type ColaboradorDim, type StatusDistServico, type DistColabAreaRow,
 } from "@/lib/dist";
 
 type DialogMode = "editar" | "duplicar";
@@ -53,6 +53,7 @@ export function DistribuicaoListaTab() {
   const [expandido, setExpandido] = useState<number | null>(null);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
   const [osAberta, setOsAberta] = useState<{ id_os: number; id_empresa: number } | null>(null);
+  const [colabDisponiveisAberto, setColabDisponiveisAberto] = useState(false);
 
   const { data: areas, isLoading: loadingAreas } = useQuery({
     queryKey: ["dist_areas"],
@@ -108,9 +109,9 @@ export function DistribuicaoListaTab() {
   const { data: apontamentosColab, isLoading: loadingApontColab } = useQuery({
     queryKey: ["vw_fb_os_apontamento_colabs", idsSemColab],
     queryFn: async () => {
-      const { data, error } = await db.from("vw_fb_os_apontamento").select("id_servico, colaborador").in("id_servico", idsSemColab);
+      const { data, error } = await db.from("vw_fb_os_apontamento").select("id_servico, id_colaborador, colaborador").in("id_servico", idsSemColab);
       if (error) throw error;
-      return (data ?? []) as { id_servico: number; colaborador: string | null }[];
+      return (data ?? []) as { id_servico: number; id_colaborador: number; colaborador: string | null }[];
     },
     enabled: idsSemColab.length > 0,
   });
@@ -126,6 +127,40 @@ export function DistribuicaoListaTab() {
     return map;
   }, [apontamentosColab]);
 
+  // Ids de dist_servico já distribuídos/em serviço — usados pra achar quem
+  // está ocupado agora no popup "Colaboradores Disponíveis".
+  const idsDistAtivos = useMemo(
+    () => servicosList.filter((s) => (s.status === "distribuido" || s.status === "em_servico") && s.id_dist != null).map((s) => s.id_dist as number),
+    [servicosList]
+  );
+
+  const { data: colabsOcupadosManual, isLoading: loadingOcupados } = useQuery({
+    queryKey: ["dist_servico_colaborador_ativos", idsDistAtivos],
+    queryFn: async () => {
+      const { data, error } = await db.from("dist_servico_colaborador").select("id_colaborador").in("id_dist_servico", idsDistAtivos);
+      if (error) throw error;
+      return (data ?? []) as { id_colaborador: number }[];
+    },
+    enabled: idsDistAtivos.length > 0,
+  });
+
+  const colaboradoresOcupadosIds = useMemo(() => {
+    const set = new Set<number>();
+    (colabsOcupadosManual ?? []).forEach((c) => set.add(c.id_colaborador));
+    (apontamentosColab ?? []).forEach((a) => set.add(a.id_colaborador));
+    return set;
+  }, [colabsOcupadosManual, apontamentosColab]);
+
+  const { data: colabArea, isLoading: loadingColabArea } = useQuery({
+    queryKey: ["vw_dist_colab_area"],
+    queryFn: async () => {
+      const { data, error } = await db.from("vw_dist_colab_area").select("*").range(0, 9999);
+      if (error) throw error;
+      return (data ?? []) as DistColabAreaRow[];
+    },
+    enabled: colabDisponiveisAberto,
+  });
+
   const servicosEnriquecidos = useMemo(
     () =>
       servicosList.map((s) => {
@@ -135,7 +170,10 @@ export function DistribuicaoListaTab() {
     [servicosList, colabsApontamentoMap]
   );
 
-  const isLoading = loadingAreas || loadingColabs || loadingServicos || (idsSemColab.length > 0 && loadingApontColab);
+  const isLoading =
+    loadingAreas || loadingColabs || loadingServicos ||
+    (idsSemColab.length > 0 && loadingApontColab) ||
+    (idsDistAtivos.length > 0 && loadingOcupados);
 
   const filtradas = servicosEnriquecidos.filter((l) => {
     if (statusFiltro ? l.status !== statusFiltro : !STATUS_ATIVOS.includes(l.status)) return false;
@@ -192,12 +230,17 @@ export function DistribuicaoListaTab() {
 
   return (
     <div className="p-4 space-y-4">
-      <div className="flex items-center gap-2">
-        <ClipboardList className="h-5 w-5 text-muted-foreground" />
-        <div>
-          <h2 className="text-base font-semibold font-display">Lista de Distribuição</h2>
-          <p className="text-xs text-muted-foreground">Serviços lançados na OS pelo vendedor — destine por área e colaborador (MLB PR)</p>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <ClipboardList className="h-5 w-5 text-muted-foreground" />
+          <div>
+            <h2 className="text-base font-semibold font-display">Lista de Distribuição</h2>
+            <p className="text-xs text-muted-foreground">Serviços lançados na OS pelo vendedor — destine por área e colaborador (MLB PR)</p>
+          </div>
         </div>
+        <Button size="sm" variant="outline" onClick={() => setColabDisponiveisAberto(true)}>
+          <Users className="h-4 w-4 mr-1" /> Colaboradores Disponíveis
+        </Button>
       </div>
 
       {/* Filtro de status — chips clicáveis. Sem nada selecionado: mostra os 4 ativos
@@ -378,6 +421,15 @@ export function DistribuicaoListaTab() {
           onClose={() => setOsAberta(null)}
         />
       )}
+
+      {colabDisponiveisAberto && (
+        <ColaboradoresDisponiveisDialog
+          colabArea={Array.isArray(colabArea) ? colabArea : []}
+          ocupadosIds={colaboradoresOcupadosIds}
+          isLoading={loadingColabArea}
+          onClose={() => setColabDisponiveisAberto(false)}
+        />
+      )}
     </div>
   );
 }
@@ -422,6 +474,76 @@ function OsServicosDialog({
           })}
           {servicos.length === 0 && <p className="text-xs text-muted-foreground py-4 text-center">Nenhum serviço encontrado pra esta OS.</p>}
         </div>
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// "Ocupado" = colaborador aparece em algum serviço distribuído/em serviço
+// (manual ou via apontamento) neste exato momento — não é uma marcação de
+// ponto em tempo real (o legado não expõe isso, ver STATUS.md), é derivado
+// do que já está sendo trabalhado agora na Gestão de Serviços.
+function ColaboradoresDisponiveisDialog({
+  colabArea, ocupadosIds, isLoading, onClose,
+}: {
+  colabArea: DistColabAreaRow[];
+  ocupadosIds: Set<number>;
+  isLoading: boolean;
+  onClose: () => void;
+}) {
+  const porArea = useMemo(() => {
+    const grupos = new Map<string, DistColabAreaRow[]>();
+    colabArea.forEach((c) => {
+      const arr = grupos.get(c.area) ?? [];
+      arr.push(c);
+      grupos.set(c.area, arr);
+    });
+    grupos.forEach((arr) => arr.sort((a, b) => {
+      const oa = ocupadosIds.has(a.id_colaborador) ? 1 : 0;
+      const ob = ocupadosIds.has(b.id_colaborador) ? 1 : 0;
+      return oa - ob || a.colaborador.localeCompare(b.colaborador);
+    }));
+    return grupos;
+  }, [colabArea, ocupadosIds]);
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Colaboradores Disponíveis</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground -mt-2">
+          Livre = sem serviço distribuído/em serviço agora. Ocupado = já está em algum serviço ativo.
+        </p>
+
+        {isLoading ? (
+          <p className="text-xs text-muted-foreground py-6 text-center">Carregando...</p>
+        ) : colabArea.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-6 text-center">Nenhum colaborador vinculado a área ainda — configure em Config. Áreas.</p>
+        ) : (
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {[...porArea.entries()].map(([area, colabs]) => (
+              <div key={area}>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">{area}</h4>
+                <div className="space-y-0.5">
+                  {colabs.map((c) => {
+                    const ocupado = ocupadosIds.has(c.id_colaborador);
+                    return (
+                      <div key={c.id_colaborador} className="flex items-center justify-between py-1 px-2 rounded-md hover:bg-muted/40">
+                        <span className="text-xs font-medium">{c.colaborador}</span>
+                        <span className={`b-badge ${ocupado ? "b-badge-critico" : "b-badge-ok"}`}>{ocupado ? "Ocupado" : "Livre"}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>

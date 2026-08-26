@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  db, distLog, type DistArea, type ColaboradorDim, type ServicopOption, type DistServicoRow,
+  db, distLog, EMPRESA_MLB_PR, type DistArea, type ColaboradorDim, type ServicopOption, type DistServicoRow,
 } from "@/lib/dist";
 import { TableSkeleton } from "./LoadingSkeleton";
 import { ErrorAlert } from "./ErrorAlert";
@@ -184,7 +184,7 @@ function MapaAreaSection({ areas }: { areas: DistArea[] }) {
   const { data: servicosVista, isLoading: loadingCatalogo } = useQuery({
     queryKey: ["dist_servicop_catalogo"],
     queryFn: async () => {
-      const { data, error } = await db.from("vw_dist_servicos").select("id_servicop, servico").range(0, 9999);
+      const { data, error } = await db.from("vw_dist_servicos").select("id_servicop, servico").eq("id_empresa", EMPRESA_MLB_PR).range(0, 9999);
       if (error) throw error;
       return (data ?? []) as Pick<DistServicoRow, "id_servicop" | "servico">[];
     },

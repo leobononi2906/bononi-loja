@@ -4,9 +4,15 @@ import { LayoutGrid, PackageOpen, Users } from "lucide-react";
 import { TableSkeleton } from "./LoadingSkeleton";
 import { ErrorAlert } from "./ErrorAlert";
 import {
-  db, STATUS_INFO, STATUS_ATIVOS, fmtDataAbrev, limparObservacao,
-  type DistArea, type DistServicoRow, type DistColabAreaRow,
+  db, STATUS_INFO, STATUS_ATIVOS, EMPRESA_MLB_PR, fmtDataAbrev, limparObservacao,
+  type DistArea, type DistServicoRow, type DistColabAreaRow, type StatusDistServico,
 } from "@/lib/dist";
+
+// Ordem da fila: primeiro quem precisa de ação (aberto), depois quem já foi
+// destinado, depois quem já está em serviço, parado por último.
+const ORDEM_STATUS: Record<StatusDistServico, number> = {
+  aberto: 0, distribuido: 1, em_servico: 2, parado: 3, cancelado: 4,
+};
 
 export function PainelGestorTab() {
   const { data: areas, isLoading: loadingAreas } = useQuery({
@@ -21,7 +27,7 @@ export function PainelGestorTab() {
   const { data: servicos, isLoading: loadingServicos, error: erroServicos } = useQuery({
     queryKey: ["vw_dist_servicos"],
     queryFn: async () => {
-      const { data, error } = await db.from("vw_dist_servicos").select("*").range(0, 9999);
+      const { data, error } = await db.from("vw_dist_servicos").select("*").eq("id_empresa", EMPRESA_MLB_PR).range(0, 9999);
       if (error) throw error;
       return (data ?? []) as DistServicoRow[];
     },
@@ -80,6 +86,17 @@ export function PainelGestorTab() {
       const arr = grupos.get(chave) ?? [];
       arr.push({ ...s, colaboradores });
       grupos.set(chave, arr);
+    });
+    // Fila: primeiro por status (aberto > distribuído > em serviço > parado),
+    // dentro do mesmo status, quem abriu primeiro (data/hora da OS) primeiro.
+    grupos.forEach((arr) => {
+      arr.sort((a, b) => {
+        const porStatus = ORDEM_STATUS[a.status] - ORDEM_STATUS[b.status];
+        if (porStatus !== 0) return porStatus;
+        const dataHoraA = `${a.data_os}T${a.hora_os ?? "00:00"}`;
+        const dataHoraB = `${b.data_os}T${b.hora_os ?? "00:00"}`;
+        return dataHoraA.localeCompare(dataHoraB);
+      });
     });
     return grupos;
   }, [servicosList, colabsApontamentoMap]);
