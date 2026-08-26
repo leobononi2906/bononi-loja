@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/dialog";
 import { TableSkeleton } from "./LoadingSkeleton";
 import { ErrorAlert } from "./ErrorAlert";
+import { SortableHeader } from "./SortableHeader";
+import { useSortable } from "@/hooks/useSortable";
 import {
   db, distLog, getUsuarioNome, setUsuarioNome, fmtDataAbrev, limparObservacao,
   STATUS_INFO, STATUS_ATIVOS,
@@ -44,6 +46,7 @@ export function DistribuicaoListaTab() {
   const [busca, setBusca] = useState("");
   const [expandido, setExpandido] = useState<number | null>(null);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
+  const [osAberta, setOsAberta] = useState<{ id_os: number; id_empresa: number } | null>(null);
 
   const { data: areas, isLoading: loadingAreas } = useQuery({
     queryKey: ["dist_areas"],
@@ -109,7 +112,9 @@ export function DistribuicaoListaTab() {
       (l.area ?? "").toLowerCase().includes(q) ||
       (l.colaboradores ?? "").toLowerCase().includes(q)
     );
-  });
+  }).map((l) => ({ ...l, dataHora: `${l.data_os}T${l.hora_os ?? "00:00"}` }));
+
+  const { sorted, sort, toggle } = useSortable(filtradas, "dataHora", "desc");
 
   function toggleStatus(s: StatusDistServico) {
     setStatusAtivos((prev) => {
@@ -192,7 +197,7 @@ export function DistribuicaoListaTab() {
           placeholder="Buscar por OS, prisma, cliente, placa, serviço..."
           className="h-8 text-xs max-w-[260px]"
         />
-        <span className="text-[11px] text-muted-foreground ml-auto">{filtradas.length} serviço(s)</span>
+        <span className="text-[11px] text-muted-foreground ml-auto">{sorted.length} serviço(s)</span>
       </div>
 
       {/* Tabela */}
@@ -201,8 +206,7 @@ export function DistribuicaoListaTab() {
           <thead>
             <tr>
               <th></th>
-              <th>Data</th>
-              <th>Hora</th>
+              <SortableHeader label="Data/Hora" field="dataHora" sort={sort} onToggle={toggle} />
               <th>Prisma</th>
               <th>Nº OS</th>
               <th>Cliente</th>
@@ -216,7 +220,7 @@ export function DistribuicaoListaTab() {
             </tr>
           </thead>
           <tbody>
-            {filtradas.map((row) => {
+            {sorted.map((row) => {
               const info = STATUS_INFO[row.status];
               const parado = row.status === "parado";
               const chave = row.id_dist ?? -row.id_servico; // chave única mesmo sem id_dist ainda
@@ -225,16 +229,19 @@ export function DistribuicaoListaTab() {
               const temDetalhe = !!(obs || row.obs_distribuicao || row.distribuido_por);
               return (
                 <Fragment key={chave}>
-                  <tr className={row.is_duplicado ? "bg-muted/20" : undefined}>
+                  <tr
+                    className={`cursor-pointer ${row.is_duplicado ? "bg-muted/20" : ""}`}
+                    onClick={() => setOsAberta({ id_os: row.id_os, id_empresa: row.id_empresa })}
+                    title="Clique pra ver todos os serviços desta OS"
+                  >
                     <td className="w-6">
                       {temDetalhe && (
-                        <button onClick={() => setExpandido(aberta ? null : chave)} className="text-muted-foreground hover:text-foreground">
+                        <button onClick={(e) => { e.stopPropagation(); setExpandido(aberta ? null : chave); }} className="text-muted-foreground hover:text-foreground">
                           {aberta ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                         </button>
                       )}
                     </td>
-                    <td className="text-xs font-mono whitespace-nowrap">{fmtDataAbrev(row.data_os)}</td>
-                    <td className="text-xs font-mono whitespace-nowrap">{row.hora_os ?? "—"}</td>
+                    <td className="text-xs font-mono whitespace-nowrap">{fmtDataAbrev(row.data_os)} {row.hora_os ?? ""}</td>
                     <td className="text-xs font-mono">{row.prisma ?? "—"}</td>
                     <td className="text-xs font-mono">
                       {row.id_os}
@@ -255,7 +262,7 @@ export function DistribuicaoListaTab() {
                     </td>
                     <td className="text-xs min-w-0 max-w-[180px] truncate" title={row.colaboradores ?? ""}>{row.colaboradores || "—"}</td>
                     <td><span className={`b-badge ${info.badgeClass}`}>{info.label}</span></td>
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       {row.status !== "cancelado" && (
                         <div className="flex items-center gap-1">
                           <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setDialogState({ mode: "editar", row })}>
@@ -275,8 +282,8 @@ export function DistribuicaoListaTab() {
                     </td>
                   </tr>
                   {aberta && temDetalhe && (
-                    <tr>
-                      <td colSpan={13} className="bg-muted/20 text-xs px-4 py-2 space-y-1">
+                    <tr onClick={(e) => e.stopPropagation()}>
+                      <td colSpan={12} className="bg-muted/20 text-xs px-4 py-2 space-y-1">
                         {obs && <p><span className="font-semibold text-muted-foreground">Obs. do vendedor: </span>{obs}</p>}
                         {row.obs_distribuicao && <p><span className="font-semibold text-muted-foreground">Obs. da distribuição: </span>{row.obs_distribuicao}</p>}
                         {row.distribuido_por && (
@@ -290,9 +297,9 @@ export function DistribuicaoListaTab() {
                 </Fragment>
               );
             })}
-            {filtradas.length === 0 && (
+            {sorted.length === 0 && (
               <tr>
-                <td colSpan={13} className="py-10 text-center">
+                <td colSpan={12} className="py-10 text-center">
                   <PackageOpen className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
                   <p className="text-xs text-muted-foreground">Nenhum serviço encontrado para este filtro.</p>
                 </td>
@@ -314,7 +321,59 @@ export function DistribuicaoListaTab() {
           }}
         />
       )}
+
+      {osAberta && (
+        <OsServicosDialog
+          idOs={osAberta.id_os}
+          servicos={servicosList.filter((s) => s.id_os === osAberta.id_os && s.id_empresa === osAberta.id_empresa)}
+          onClose={() => setOsAberta(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function OsServicosDialog({
+  idOs, servicos, onClose,
+}: {
+  idOs: number;
+  servicos: DistServicoRow[];
+  onClose: () => void;
+}) {
+  const empresa = servicos[0]?.empresa ?? "";
+  const cliente = servicos[0]?.cliente ?? "";
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>OS {idOs} — {empresa}</DialogTitle>
+        </DialogHeader>
+        <div className="text-xs text-muted-foreground -mt-2">{cliente}</div>
+
+        <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+          {servicos.map((s) => {
+            const info = STATUS_INFO[s.status];
+            return (
+              <div key={s.id_dist ?? -s.id_servico} className="border rounded-md p-2 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium">{s.servico}</span>
+                  <span className={`b-badge ${info.badgeClass} shrink-0`}>{info.label}</span>
+                </div>
+                <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3">
+                  <span>Área: {s.area ?? "—"}</span>
+                  <span>Colaborador(es): {s.colaboradores || "—"}</span>
+                </div>
+              </div>
+            );
+          })}
+          {servicos.length === 0 && <p className="text-xs text-muted-foreground py-4 text-center">Nenhum serviço encontrado pra esta OS.</p>}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
