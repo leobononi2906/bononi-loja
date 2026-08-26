@@ -5,7 +5,8 @@ import { TableSkeleton } from "./LoadingSkeleton";
 import { ErrorAlert } from "./ErrorAlert";
 import {
   db, STATUS_INFO, STATUS_ATIVOS, EMPRESA_MLB_PR, fmtDataAbrev, limparObservacao,
-  type DistArea, type DistServicoRow, type DistColabAreaRow, type StatusDistServico,
+  calcularPresenca, presencaDe,
+  type DistArea, type DistServicoRow, type DistColabAreaRow, type StatusDistServico, type ApontamentoPresenca,
 } from "@/lib/dist";
 
 // Ordem da fila: primeiro quem precisa de ação (aberto), depois quem já foi
@@ -44,23 +45,29 @@ export function PainelGestorTab() {
 
   const servicosList = Array.isArray(servicos) ? servicos : [];
 
-  // Serviço "em serviço" pode nunca ter sido destinado por aqui — busca o
-  // colaborador do apontamento do legado como fallback (mesma lógica da Lista
-  // de Distribuição), pra mostrar quem está mexendo em vez do status genérico.
-  const idsSemColab = useMemo(
-    () => servicosList.filter((s) => s.fl_apontado === 1 && !s.colaboradores).map((s) => s.id_servico),
+  // Apontamento de todo serviço "em serviço" — usado tanto pro fallback de
+  // colaborador (serviço nunca destinado por aqui) quanto pra saber se cada
+  // colaborador está trabalhando agora ou pausado (apontamento fechado, mas
+  // o serviço em si continua em andamento).
+  const idsEmServico = useMemo(
+    () => servicosList.filter((s) => s.status === "em_servico").map((s) => s.id_servico),
     [servicosList]
   );
 
   const { data: apontamentosColab, isLoading: loadingApontColab } = useQuery({
-    queryKey: ["vw_fb_os_apontamento_colabs", idsSemColab],
+    queryKey: ["vw_fb_os_apontamento_colabs", idsEmServico],
     queryFn: async () => {
-      const { data, error } = await db.from("vw_fb_os_apontamento").select("id_servico, id_colaborador, colaborador").in("id_servico", idsSemColab);
+      const { data, error } = await db.from("vw_fb_os_apontamento").select("id_servico, id_colaborador, colaborador, hora_termino").in("id_servico", idsEmServico);
       if (error) throw error;
-      return (data ?? []) as { id_servico: number; id_colaborador: number; colaborador: string | null }[];
+      return (data ?? []) as { id_servico: number; id_colaborador: number; colaborador: string | null; hora_termino: string | null }[];
     },
-    enabled: idsSemColab.length > 0,
+    enabled: idsEmServico.length > 0,
   });
+
+  const presencaMap = useMemo(
+    () => calcularPresenca((apontamentosColab ?? []) as ApontamentoPresenca[]),
+    [apontamentosColab]
+  );
 
   const colabsApontamentoMap = useMemo(() => {
     const map = new Map<number, string>();
@@ -90,32 +97,37 @@ export function PainelGestorTab() {
     enabled: idsEmServicoComDist.length > 0,
   });
 
-  // id_colaborador -> prisma do serviço em serviço que ele tá fazendo agora
-  // (manual, via dist_servico_colaborador, ou via apontamento quando nunca
-  // foi destinado por aqui) — mesma lógica de "ocupado" do popup da Lista.
-  const colabIdParaPrisma = useMemo(() => {
-    const prismaPorIdDist = new Map<number, string>();
+  // id_colaborador -> prisma + presença do serviço em serviço que ele tá
+  // fazendo agora (manual, via dist_servico_colaborador, ou via apontamento
+  // quando nunca foi destinado por aqui) — mesma lógica de "ocupado" do popup
+  // da Lista. Sem apontamento nenhum ainda (acabou de ser destinado) conta
+  // como "trabalhando" — só vira "pausado" quando existe apontamento fechado.
+  const colabIdParaPresenca = useMemo(() => {
+    const idDistParaServico = new Map<number, number>();
     const prismaPorIdServico = new Map<number, string>();
     servicosList.forEach((s) => {
       if (s.status !== "em_servico" || !s.prisma) return;
-      if (s.id_dist != null) prismaPorIdDist.set(s.id_dist, s.prisma);
+      if (s.id_dist != null) idDistParaServico.set(s.id_dist, s.id_servico);
       prismaPorIdServico.set(s.id_servico, s.prisma);
     });
-    const map = new Map<number, string>();
+    const map = new Map<number, { prisma: string; presenca: "trabalhando" | "pausado" }>();
     (colabsEmServicoManual ?? []).forEach((c) => {
-      const prisma = prismaPorIdDist.get(c.id_dist_servico);
-      if (prisma) map.set(c.id_colaborador, prisma);
+      const idServico = idDistParaServico.get(c.id_dist_servico);
+      const prisma = idServico != null ? prismaPorIdServico.get(idServico) : undefined;
+      if (idServico == null || !prisma) return;
+      map.set(c.id_colaborador, { prisma, presenca: presencaDe(presencaMap, idServico, c.id_colaborador) ?? "trabalhando" });
     });
     (apontamentosColab ?? []).forEach((a) => {
       const prisma = prismaPorIdServico.get(a.id_servico);
-      if (prisma) map.set(a.id_colaborador, prisma);
+      if (!prisma || map.has(a.id_colaborador)) return;
+      map.set(a.id_colaborador, { prisma, presenca: presencaDe(presencaMap, a.id_servico, a.id_colaborador) ?? "trabalhando" });
     });
     return map;
-  }, [servicosList, colabsEmServicoManual, apontamentosColab]);
+  }, [servicosList, colabsEmServicoManual, apontamentosColab, presencaMap]);
 
   const isLoading =
     loadingAreas || loadingServicos || loadingColabArea ||
-    (idsSemColab.length > 0 && loadingApontColab) ||
+    (idsEmServico.length > 0 && loadingApontColab) ||
     (idsEmServicoComDist.length > 0 && loadingColabsEmServico);
   const areasList = Array.isArray(areas) ? areas : [];
   const colabAreaList = Array.isArray(colabArea) ? colabArea : [];
@@ -234,12 +246,16 @@ export function PainelGestorTab() {
                 </h4>
                 <div className="space-y-0.5">
                   {colabs.map((c) => {
-                    const prisma = colabIdParaPrisma.get(c.id_colaborador);
+                    const info = colabIdParaPresenca.get(c.id_colaborador);
                     return (
                       <div key={c.id_colaborador} className="flex items-center justify-between py-1 px-2 rounded-md hover:bg-muted/40">
                         <span className="text-xs font-medium">{c.colaborador}</span>
-                        {prisma ? (
-                          <span className="b-badge b-badge-critico" title="Em serviço agora">Prisma {prisma}</span>
+                        {info ? (
+                          info.presenca === "pausado" ? (
+                            <span className="b-badge b-badge-muted" title={`Pausado — apontamento fechado, serviço (Prisma ${info.prisma}) ainda em andamento`}>Pausado · {info.prisma}</span>
+                          ) : (
+                            <span className="b-badge b-badge-critico" title="Em serviço agora">Prisma {info.prisma}</span>
+                          )
                         ) : (
                           <span className={`b-badge ${c.situacao === "A" ? "b-badge-ok" : "b-badge-muted"}`}>{c.situacao === "A" ? "Ativo" : c.situacao}</span>
                         )}

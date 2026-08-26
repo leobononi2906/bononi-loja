@@ -199,6 +199,41 @@ export function fmtHoras(horasDecimais: number | null | undefined): string {
   return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, "0")}`;
 }
 
+// ─── PRESENÇA DO COLABORADOR (trabalhando agora vs pausado) ─────────────────
+// "em_servico" é status do SERVIÇO (não muda). Pausado é um estado da PESSOA
+// dentro desse serviço: já apontou hora ali, mas o apontamento mais recente
+// está fechado (hora_termino preenchida) — ela não está lá agora, mas o
+// serviço continua em andamento (não foi parado nem concluído). Combinado
+// com o Leo 26/08: colaborador volta a "trabalhando" sozinho no próximo
+// apontamento aberto; o caso de serviço abandonado (ex: OS de novembro presa
+// na funilaria) é resolvido manualmente pelo gestor com o botão Parar — não
+// é este helper que decide isso.
+export type PresencaColaborador = "trabalhando" | "pausado";
+
+export interface ApontamentoPresenca {
+  id_servico: number;
+  id_colaborador: number;
+  hora_termino: string | null;
+}
+
+// "trabalhando" sempre vence (sessão aberta), mesmo se aparecer depois de um
+// apontamento fechado do mesmo colaborador/serviço na lista.
+export function calcularPresenca(apontamentos: ApontamentoPresenca[]): Map<string, PresencaColaborador> {
+  const mapa = new Map<string, PresencaColaborador>();
+  apontamentos.forEach((a) => {
+    const chave = `${a.id_servico}|${a.id_colaborador}`;
+    if (!a.hora_termino) mapa.set(chave, "trabalhando");
+    else if (mapa.get(chave) !== "trabalhando") mapa.set(chave, "pausado");
+  });
+  return mapa;
+}
+
+export function presencaDe(
+  mapa: Map<string, PresencaColaborador>, idServico: number, idColaborador: number
+): PresencaColaborador | null {
+  return mapa.get(`${idServico}|${idColaborador}`) ?? null;
+}
+
 // TBL_SERVICO.DESCRICAO é o campo certo (confirmado 26/08 lendo direto da produção,
 // só leitura, via node-firebird em bononi-replicador) — é RTF puro salvo pelo
 // sistema antigo, tipo:

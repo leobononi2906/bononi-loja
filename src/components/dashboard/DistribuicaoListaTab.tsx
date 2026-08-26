@@ -19,8 +19,9 @@ import { SortableHeader } from "./SortableHeader";
 import { useSortable } from "@/hooks/useSortable";
 import {
   db, distLog, getUsuarioNome, setUsuarioNome, fmtDataAbrev, limparObservacao,
-  STATUS_INFO, STATUS_ATIVOS, EMPRESA_MLB_PR,
+  STATUS_INFO, STATUS_ATIVOS, EMPRESA_MLB_PR, calcularPresenca, presencaDe,
   type DistArea, type DistServicoRow, type ColaboradorDim, type StatusDistServico, type DistColabAreaRow,
+  type ApontamentoPresenca,
 } from "@/lib/dist";
 
 type DialogMode = "editar" | "duplicar";
@@ -100,24 +101,29 @@ export function DistribuicaoListaTab() {
   const colabsList = Array.isArray(colaboradores) ? colaboradores : [];
   const servicosList = Array.isArray(servicos) ? servicos : [];
 
-  // Serviço "em serviço" pode nunca ter sido destinado por aqui (mecânico só
-  // começou a apontar direto no legado) — nesse caso busca o colaborador do
-  // apontamento (vw_fb_os_apontamento) como fallback, marcado "(apontamento)"
-  // pra não confundir com uma distribuição de verdade.
-  const idsSemColab = useMemo(
-    () => servicosList.filter((s) => s.fl_apontado === 1 && !s.colaboradores).map((s) => s.id_servico),
+  // Apontamento de todo serviço "em serviço" — cobre o fallback de colaborador
+  // (serviço nunca destinado por aqui, marcado "(apontamento)") e também
+  // define se cada colaborador está trabalhando agora ou pausado (apontamento
+  // fechado, mas o serviço continua em andamento).
+  const idsEmServico = useMemo(
+    () => servicosList.filter((s) => s.status === "em_servico").map((s) => s.id_servico),
     [servicosList]
   );
 
   const { data: apontamentosColab, isLoading: loadingApontColab } = useQuery({
-    queryKey: ["vw_fb_os_apontamento_colabs", idsSemColab],
+    queryKey: ["vw_fb_os_apontamento_colabs", idsEmServico],
     queryFn: async () => {
-      const { data, error } = await db.from("vw_fb_os_apontamento").select("id_servico, id_colaborador, colaborador").in("id_servico", idsSemColab);
+      const { data, error } = await db.from("vw_fb_os_apontamento").select("id_servico, id_colaborador, colaborador, hora_termino").in("id_servico", idsEmServico);
       if (error) throw error;
-      return (data ?? []) as { id_servico: number; id_colaborador: number; colaborador: string | null }[];
+      return (data ?? []) as { id_servico: number; id_colaborador: number; colaborador: string | null; hora_termino: string | null }[];
     },
-    enabled: idsSemColab.length > 0,
+    enabled: idsEmServico.length > 0,
   });
+
+  const presencaMap = useMemo(
+    () => calcularPresenca((apontamentosColab ?? []) as ApontamentoPresenca[]),
+    [apontamentosColab]
+  );
 
   const colabsApontamentoMap = useMemo(() => {
     const map = new Map<number, string>();
@@ -140,19 +146,33 @@ export function DistribuicaoListaTab() {
   const { data: colabsOcupadosManual, isLoading: loadingOcupados } = useQuery({
     queryKey: ["dist_servico_colaborador_ativos", idsDistAtivos],
     queryFn: async () => {
-      const { data, error } = await db.from("dist_servico_colaborador").select("id_colaborador").in("id_dist_servico", idsDistAtivos);
+      const { data, error } = await db.from("dist_servico_colaborador").select("id_colaborador, id_dist_servico").in("id_dist_servico", idsDistAtivos);
       if (error) throw error;
-      return (data ?? []) as { id_colaborador: number }[];
+      return (data ?? []) as { id_colaborador: number; id_dist_servico: number }[];
     },
     enabled: idsDistAtivos.length > 0,
   });
 
+  // "Ocupado" = distribuído/parado ainda sem apontamento (assumido ocupado) OU
+  // com apontamento e trabalhando agora. Se o colaborador está "pausado" num
+  // serviço em_servico (apontamento fechado, saiu de perto), ele volta a
+  // contar como livre pra esse popup — mesmo pedido do Leo 26/08.
   const colaboradoresOcupadosIds = useMemo(() => {
+    const idDistParaServico = new Map<number, DistServicoRow>();
+    servicosList.forEach((s) => { if (s.id_dist != null) idDistParaServico.set(s.id_dist, s); });
+
     const set = new Set<number>();
-    (colabsOcupadosManual ?? []).forEach((c) => set.add(c.id_colaborador));
-    (apontamentosColab ?? []).forEach((a) => set.add(a.id_colaborador));
+    (colabsOcupadosManual ?? []).forEach((c) => {
+      const servico = idDistParaServico.get(c.id_dist_servico);
+      if (!servico || servico.status !== "em_servico") { set.add(c.id_colaborador); return; }
+      const p = presencaDe(presencaMap, servico.id_servico, c.id_colaborador);
+      if (p !== "pausado") set.add(c.id_colaborador);
+    });
+    (apontamentosColab ?? []).forEach((a) => {
+      if (!a.hora_termino) set.add(a.id_colaborador);
+    });
     return set;
-  }, [colabsOcupadosManual, apontamentosColab]);
+  }, [colabsOcupadosManual, apontamentosColab, servicosList, presencaMap]);
 
   const { data: colabArea, isLoading: loadingColabArea } = useQuery({
     queryKey: ["vw_dist_colab_area"],
@@ -175,7 +195,7 @@ export function DistribuicaoListaTab() {
 
   const isLoading =
     loadingAreas || loadingColabs || loadingServicos ||
-    (idsSemColab.length > 0 && loadingApontColab) ||
+    (idsEmServico.length > 0 && loadingApontColab) ||
     (idsDistAtivos.length > 0 && loadingOcupados);
 
   const filtradas = servicosEnriquecidos.filter((l) => {
