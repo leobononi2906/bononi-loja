@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ClipboardList, Plus, Copy, PauseCircle, PlayCircle, Pencil, PackageOpen, Info,
+  ClipboardList, Copy, PauseCircle, PlayCircle, Pencil, PackageOpen, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,29 +16,25 @@ import {
 import { TableSkeleton } from "./LoadingSkeleton";
 import { ErrorAlert } from "./ErrorAlert";
 import {
-  db, distLog, getUsuarioNome, setUsuarioNome, deriveStatusEfetivo, STATUS_INFO, STATUS_FILTRO,
-  type DistArea, type DistServico, type DistServicoColaborador, type StatusEfetivo,
+  db, distLog, getUsuarioNome, setUsuarioNome, fmtDataAbrev,
+  STATUS_INFO, STATUS_ATIVOS, STATUS_FILTRO,
+  type DistArea, type DistServicoRow, type ColaboradorDim, type StatusDistServico,
 } from "@/lib/dist";
 
-interface Colaborador {
-  id_colaborador: number;
-  nome_colaborador: string;
-}
-
-type DialogMode = "novo" | "duplicar" | "editar";
+type DialogMode = "editar" | "duplicar";
 
 interface DialogState {
   mode: DialogMode;
-  base?: DistServico;
-  colabsBase?: number[];
+  row: DistServicoRow;
 }
 
 export function DistribuicaoListaTab() {
   const qc = useQueryClient();
-  const [statusFiltro, setStatusFiltro] = useState<StatusEfetivo | "TODOS">("TODOS");
+  const [statusFiltro, setStatusFiltro] = useState<StatusDistServico | "ATIVOS" | "TODOS">("ATIVOS");
   const [areaFiltro, setAreaFiltro] = useState<string>("TODOS");
   const [colabFiltro, setColabFiltro] = useState<string>("TODOS");
   const [busca, setBusca] = useState("");
+  const [expandido, setExpandido] = useState<number | null>(null);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
 
   const { data: areas, isLoading: loadingAreas } = useQuery({
@@ -51,100 +47,84 @@ export function DistribuicaoListaTab() {
   });
 
   const { data: colaboradores, isLoading: loadingColabs } = useQuery({
-    queryKey: ["loja_config_colaborador_ativos"],
+    queryKey: ["vw_dim_colaborador_ativos"],
     queryFn: async () => {
       const { data, error } = await db
-        .from("loja_config_colaborador")
-        .select("id_colaborador, nome_colaborador")
-        .eq("ativo", true)
+        .from("vw_dim_colaborador")
+        .select("id_colaborador, nome_colaborador, situacao, departamento")
+        .eq("situacao", "A")
         .order("nome_colaborador", { ascending: true })
         .range(0, 9999);
       if (error) throw error;
-      return (data ?? []) as Colaborador[];
+      return (data ?? []) as ColaboradorDim[];
     },
   });
 
   const { data: servicos, isLoading: loadingServicos, error: erroServicos } = useQuery({
-    queryKey: ["dist_servico"],
+    queryKey: ["vw_dist_servicos"],
     queryFn: async () => {
-      const { data, error } = await db.from("dist_servico").select("*").order("atualizado_em", { ascending: false }).range(0, 9999);
+      const { data, error } = await db
+        .from("vw_dist_servicos")
+        .select("*")
+        .order("data_os", { ascending: false })
+        .order("hora_os", { ascending: false })
+        .range(0, 9999);
       if (error) throw error;
-      return (data ?? []) as DistServico[];
+      return (data ?? []) as DistServicoRow[];
     },
   });
 
-  const { data: servicoColabs, isLoading: loadingServicoColabs } = useQuery({
-    queryKey: ["dist_servico_colaborador"],
-    queryFn: async () => {
-      const { data, error } = await db.from("dist_servico_colaborador").select("*").range(0, 9999);
-      if (error) throw error;
-      return (data ?? []) as DistServicoColaborador[];
-    },
-  });
-
-  const isLoading = loadingAreas || loadingColabs || loadingServicos || loadingServicoColabs;
-
+  const isLoading = loadingAreas || loadingColabs || loadingServicos;
   const areasList = Array.isArray(areas) ? areas : [];
   const colabsList = Array.isArray(colaboradores) ? colaboradores : [];
   const servicosList = Array.isArray(servicos) ? servicos : [];
-  const vinculos = Array.isArray(servicoColabs) ? servicoColabs : [];
 
-  const areaMap = useMemo(() => new Map(areasList.map((a) => [a.id, a.nome])), [areasList]);
-  const colabMap = useMemo(() => new Map(colabsList.map((c) => [c.id_colaborador, c.nome_colaborador])), [colabsList]);
-
-  const colabsPorServico = useMemo(() => {
-    const map = new Map<number, number[]>();
-    vinculos.forEach((v) => {
-      const arr = map.get(v.id_dist_servico) ?? [];
-      arr.push(v.id_colaborador);
-      map.set(v.id_dist_servico, arr);
-    });
-    return map;
-  }, [vinculos]);
-
-  const linhas = useMemo(() => {
-    return servicosList.map((s) => {
-      const colabsIds = colabsPorServico.get(s.id) ?? [];
-      const status = deriveStatusEfetivo({
-        status_manual: s.status_manual,
-        id_area: s.id_area,
-        temColaborador: colabsIds.length > 0,
-      });
-      return {
-        servico: s,
-        colabsIds,
-        colabsNomes: colabsIds.map((id) => colabMap.get(id) ?? `#${id}`).join(", "),
-        areaNome: s.id_area != null ? (areaMap.get(s.id_area) ?? `#${s.id_area}`) : null,
-        status,
-      };
-    });
-  }, [servicosList, colabsPorServico, colabMap, areaMap]);
-
-  const filtradas = linhas.filter((l) => {
-    if (statusFiltro !== "TODOS" && l.status !== statusFiltro) return false;
-    if (areaFiltro !== "TODOS" && String(l.servico.id_area ?? "") !== areaFiltro) return false;
-    if (colabFiltro !== "TODOS" && !l.colabsIds.includes(Number(colabFiltro))) return false;
+  const filtradas = servicosList.filter((l) => {
+    if (statusFiltro === "ATIVOS") {
+      if (!STATUS_ATIVOS.includes(l.status)) return false;
+    } else if (statusFiltro !== "TODOS" && l.status !== statusFiltro) {
+      return false;
+    }
+    if (areaFiltro === "SEM_AREA" && l.id_area != null) return false;
+    if (areaFiltro !== "TODOS" && areaFiltro !== "SEM_AREA" && String(l.id_area ?? "") !== areaFiltro) return false;
+    if (colabFiltro !== "TODOS") {
+      const nome = colabsList.find((c) => String(c.id_colaborador) === colabFiltro)?.nome_colaborador;
+      if (!nome || !(l.colaboradores ?? "").includes(nome)) return false;
+    }
     const q = busca.trim().toLowerCase();
     if (!q) return true;
     return (
-      String(l.servico.id_servico_legado).includes(q) ||
-      String(l.servico.id_os ?? "").includes(q) ||
-      (l.servico.observacao ?? "").toLowerCase().includes(q) ||
-      (l.areaNome ?? "").toLowerCase().includes(q) ||
-      l.colabsNomes.toLowerCase().includes(q)
+      String(l.id_servico).includes(q) ||
+      String(l.id_os).includes(q) ||
+      (l.prisma ?? "").toLowerCase().includes(q) ||
+      (l.cliente ?? "").toLowerCase().includes(q) ||
+      (l.placa ?? "").toLowerCase().includes(q) ||
+      (l.modelo ?? "").toLowerCase().includes(q) ||
+      (l.servico ?? "").toLowerCase().includes(q) ||
+      (l.observacao ?? "").toLowerCase().includes(q) ||
+      (l.area ?? "").toLowerCase().includes(q) ||
+      (l.colaboradores ?? "").toLowerCase().includes(q)
     );
   });
 
-  async function toggleParado(s: DistServico) {
-    const novo = s.status_manual === "parado" ? null : "parado";
-    const { error } = await db.from("dist_servico").update({ status_manual: novo, atualizado_em: new Date().toISOString() }).eq("id", s.id);
+  async function toggleParado(row: DistServicoRow) {
+    const parado = row.status === "parado";
+    const novoStatusManual = parado ? null : "parado";
+    let error;
+    if (row.id_dist != null) {
+      ({ error } = await db.from("dist_servico").update({ status_manual: novoStatusManual, atualizado_em: new Date().toISOString() }).eq("id", row.id_dist));
+    } else {
+      ({ error } = await db.from("dist_servico").insert({
+        id_servico_legado: row.id_servico, id_os: row.id_os, id_area: row.id_area, status_manual: novoStatusManual,
+      }));
+    }
     if (error) {
       toast.error("Erro ao atualizar: " + error.message);
       distLog("error", "ERRO_TOGGLE_PARADO", error.message);
       return;
     }
-    toast.success(novo === "parado" ? "Serviço marcado como parado." : "Serviço reaberto.");
-    qc.invalidateQueries({ queryKey: ["dist_servico"] });
+    toast.success(parado ? "Serviço reaberto." : "Serviço marcado como parado.");
+    qc.invalidateQueries({ queryKey: ["vw_dist_servicos"] });
   }
 
   if (isLoading) return <TableSkeleton />;
@@ -152,30 +132,17 @@ export function DistribuicaoListaTab() {
 
   return (
     <div className="p-4 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <ClipboardList className="h-5 w-5 text-muted-foreground" />
-          <div>
-            <h2 className="text-base font-semibold font-display">Lista de Distribuição</h2>
-            <p className="text-xs text-muted-foreground">Serviços em aberto e sua distribuição por área/colaborador</p>
-          </div>
+      <div className="flex items-center gap-2">
+        <ClipboardList className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <h2 className="text-base font-semibold font-display">Lista de Distribuição</h2>
+          <p className="text-xs text-muted-foreground">Serviços lançados na OS pelo vendedor — destine por área e colaborador</p>
         </div>
-        <Button size="sm" onClick={() => setDialogState({ mode: "novo" })}>
-          <Plus className="h-4 w-4 mr-1" /> Nova distribuição
-        </Button>
-      </div>
-
-      <div className="bg-blue-50 dark:bg-blue-950/10 border border-blue-200 dark:border-blue-900/40 rounded-lg p-3 flex items-start gap-2.5">
-        <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-        <p className="text-xs text-muted-foreground">
-          Lista provisória — mostra só os serviços já lançados aqui manualmente. Quando a view <span className="font-mono">vw_dist_servicos</span> for
-          publicada, a lista passa a trazer automaticamente todos os serviços em aberto do sistema (cliente, placa, serviço, preço e tempo).
-        </p>
       </div>
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={statusFiltro} onValueChange={(v) => setStatusFiltro(v as StatusEfetivo | "TODOS")}>
+        <Select value={statusFiltro} onValueChange={(v) => setStatusFiltro(v as StatusDistServico | "ATIVOS" | "TODOS")}>
           <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
             {STATUS_FILTRO.map((s) => <SelectItem key={s.value} value={s.value} className="text-xs">{s.label}</SelectItem>)}
@@ -185,11 +152,12 @@ export function DistribuicaoListaTab() {
           <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue placeholder="Área" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="TODOS" className="text-xs">Todas as áreas</SelectItem>
+            <SelectItem value="SEM_AREA" className="text-xs">Sem área</SelectItem>
             {areasList.map((a) => <SelectItem key={a.id} value={String(a.id)} className="text-xs">{a.nome}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={colabFiltro} onValueChange={setColabFiltro}>
-          <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="Colaborador" /></SelectTrigger>
+          <SelectTrigger className="h-8 w-[190px] text-xs"><SelectValue placeholder="Colaborador" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="TODOS" className="text-xs">Todos os colaboradores</SelectItem>
             {colabsList.map((c) => <SelectItem key={c.id_colaborador} value={String(c.id_colaborador)} className="text-xs">{c.nome_colaborador}</SelectItem>)}
@@ -198,9 +166,10 @@ export function DistribuicaoListaTab() {
         <Input
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar por serviço, OS, área, colaborador..."
+          placeholder="Buscar por OS, prisma, cliente, placa, serviço..."
           className="h-8 text-xs max-w-[260px]"
         />
+        <span className="text-[11px] text-muted-foreground ml-auto">{filtradas.length} serviço(s)</span>
       </div>
 
       {/* Tabela */}
@@ -208,59 +177,93 @@ export function DistribuicaoListaTab() {
         <table className="data-table">
           <thead>
             <tr>
+              <th></th>
+              <th>Data</th>
+              <th>Hora</th>
+              <th>Prisma</th>
+              <th>Nº OS</th>
+              <th>Cliente</th>
+              <th>Placa</th>
+              <th>Modelo</th>
               <th>Serviço</th>
-              <th>OS</th>
               <th>Área</th>
               <th>Colaborador(es)</th>
               <th>Status</th>
-              <th>Observação</th>
               <th>Ações</th>
             </tr>
           </thead>
           <tbody>
-            {filtradas.map((l) => {
-              const info = STATUS_INFO[l.status];
-              const parado = l.servico.status_manual === "parado";
+            {filtradas.map((row) => {
+              const info = STATUS_INFO[row.status];
+              const parado = row.status === "parado";
+              const chave = row.id_dist ?? -row.id_servico; // chave única mesmo sem id_dist ainda
+              const aberta = expandido === chave;
+              const temDetalhe = !!(row.observacao || row.obs_distribuicao || row.distribuido_por);
               return (
-                <tr key={l.servico.id}>
-                  <td className="font-mono text-xs">
-                    #{l.servico.id_servico_legado}
-                    {l.servico.duplicado_de != null && <span className="text-[10px] text-muted-foreground ml-1">(dup.)</span>}
-                  </td>
-                  <td className="font-mono text-xs">{l.servico.id_os ?? "—"}</td>
-                  <td className="text-xs">{l.areaNome ?? "—"}</td>
-                  <td className="text-xs min-w-0 max-w-[220px] truncate" title={l.colabsNomes}>{l.colabsNomes || "—"}</td>
-                  <td><span className={`b-badge ${info.badgeClass}`}>{info.label}</span></td>
-                  <td className="text-xs min-w-0 max-w-[200px] truncate" title={l.servico.observacao ?? ""}>{l.servico.observacao || "—"}</td>
-                  <td>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        size="sm" variant="ghost" className="h-7 px-2 text-[11px]"
-                        onClick={() => setDialogState({ mode: "editar", base: l.servico, colabsBase: l.colabsIds })}
-                      >
-                        <Pencil className="h-3 w-3 mr-1" /> Destinar
-                      </Button>
-                      <Button
-                        size="sm" variant="ghost" className="h-7 px-2 text-[11px]"
-                        onClick={() => setDialogState({ mode: "duplicar", base: l.servico })}
-                      >
-                        <Copy className="h-3 w-3 mr-1" /> Duplicar
-                      </Button>
-                      <Button
-                        size="sm" variant="ghost" className="h-7 px-2 text-[11px]"
-                        onClick={() => toggleParado(l.servico)}
-                      >
-                        {parado ? <PlayCircle className="h-3 w-3 mr-1" /> : <PauseCircle className="h-3 w-3 mr-1" />}
-                        {parado ? "Reabrir" : "Parar"}
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
+                <Fragment key={chave}>
+                  <tr className={row.is_duplicado ? "bg-muted/20" : undefined}>
+                    <td className="w-6">
+                      {temDetalhe && (
+                        <button onClick={() => setExpandido(aberta ? null : chave)} className="text-muted-foreground hover:text-foreground">
+                          {aberta ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                        </button>
+                      )}
+                    </td>
+                    <td className="text-xs font-mono whitespace-nowrap">{fmtDataAbrev(row.data_os)}</td>
+                    <td className="text-xs font-mono whitespace-nowrap">{row.hora_os ?? "—"}</td>
+                    <td className="text-xs font-mono">{row.prisma ?? "—"}</td>
+                    <td className="text-xs font-mono">
+                      {row.id_os}
+                      {row.is_duplicado && <span className="text-[10px] text-muted-foreground ml-1">(dup.)</span>}
+                    </td>
+                    <td className="text-xs min-w-0 max-w-[180px] truncate" title={row.cliente}>{row.cliente}</td>
+                    <td className="text-xs font-mono whitespace-nowrap">{row.placa ?? "—"}</td>
+                    <td className="text-xs min-w-0 max-w-[140px] truncate" title={row.modelo ?? ""}>{row.modelo ?? "—"}</td>
+                    <td className="text-xs min-w-0 max-w-[180px] truncate" title={row.servico}>{row.servico}</td>
+                    <td className="text-xs whitespace-nowrap">
+                      {row.area ?? "—"}
+                      {row.area_automatica && row.area && <span className="text-[10px] text-muted-foreground ml-1">(auto)</span>}
+                    </td>
+                    <td className="text-xs min-w-0 max-w-[180px] truncate" title={row.colaboradores ?? ""}>{row.colaboradores || "—"}</td>
+                    <td><span className={`b-badge ${info.badgeClass}`}>{info.label}</span></td>
+                    <td>
+                      {row.status !== "cancelado" && (
+                        <div className="flex items-center gap-1">
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setDialogState({ mode: "editar", row })}>
+                            <Pencil className="h-3 w-3 mr-1" /> Destinar
+                          </Button>
+                          {row.id_dist != null && (
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setDialogState({ mode: "duplicar", row })}>
+                              <Copy className="h-3 w-3 mr-1" /> Duplicar
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => toggleParado(row)}>
+                            {parado ? <PlayCircle className="h-3 w-3 mr-1" /> : <PauseCircle className="h-3 w-3 mr-1" />}
+                            {parado ? "Reabrir" : "Parar"}
+                          </Button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                  {aberta && temDetalhe && (
+                    <tr>
+                      <td colSpan={13} className="bg-muted/20 text-xs px-4 py-2 space-y-1">
+                        {row.observacao && <p><span className="font-semibold text-muted-foreground">Obs. do vendedor: </span>{row.observacao}</p>}
+                        {row.obs_distribuicao && <p><span className="font-semibold text-muted-foreground">Obs. da distribuição: </span>{row.obs_distribuicao}</p>}
+                        {row.distribuido_por && (
+                          <p className="text-muted-foreground">
+                            Distribuído por {row.distribuido_por}{row.distribuido_em ? ` em ${new Date(row.distribuido_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}
+                          </p>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
             {filtradas.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-10 text-center">
+                <td colSpan={13} className="py-10 text-center">
                   <PackageOpen className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
                   <p className="text-xs text-muted-foreground">Nenhum serviço encontrado para este filtro.</p>
                 </td>
@@ -278,8 +281,7 @@ export function DistribuicaoListaTab() {
           onClose={() => setDialogState(null)}
           onSaved={() => {
             setDialogState(null);
-            qc.invalidateQueries({ queryKey: ["dist_servico"] });
-            qc.invalidateQueries({ queryKey: ["dist_servico_colaborador"] });
+            qc.invalidateQueries({ queryKey: ["vw_dist_servicos"] });
           }}
         />
       )}
@@ -292,21 +294,43 @@ function DistribuirDialog({
 }: {
   state: DialogState;
   areas: DistArea[];
-  colaboradores: Colaborador[];
+  colaboradores: ColaboradorDim[];
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { mode, base, colabsBase } = state;
-  const [idServicoLegado, setIdServicoLegado] = useState(mode === "novo" ? "" : String(base?.id_servico_legado ?? ""));
-  const [idOs, setIdOs] = useState(mode === "novo" ? "" : String(base?.id_os ?? ""));
-  const [idArea, setIdArea] = useState<string>(mode === "editar" && base?.id_area != null ? String(base.id_area) : "");
-  const [colabsSel, setColabsSel] = useState<Set<number>>(new Set(mode === "editar" ? colabsBase ?? [] : []));
-  const [observacao, setObservacao] = useState(mode === "editar" ? base?.observacao ?? "" : "");
+  const { mode, row } = state;
+  const editando = mode === "editar";
+
+  // Ao editar uma linha já distribuída, busca os colaboradores de verdade (ids) —
+  // o campo "colaboradores" da view é só texto agregado, não dá pra pré-marcar por nome.
+  const { data: colabsAtuais } = useQuery({
+    queryKey: ["dist_servico_colaborador", row.id_dist],
+    queryFn: async () => {
+      if (row.id_dist == null) return [];
+      const { data, error } = await db.from("dist_servico_colaborador").select("id_colaborador").eq("id_dist_servico", row.id_dist);
+      if (error) throw error;
+      return (data ?? []).map((r: { id_colaborador: number }) => r.id_colaborador) as number[];
+    },
+    enabled: editando && row.id_dist != null,
+  });
+
+  const [idArea, setIdArea] = useState<string>(editando && row.id_area != null ? String(row.id_area) : "");
+  const [colabsSel, setColabsSel] = useState<Set<number>>(new Set());
+  const [colabsInicializado, setColabsInicializado] = useState(!editando || row.id_dist == null);
+  const [buscaColab, setBuscaColab] = useState("");
+  const [observacao, setObservacao] = useState(editando ? row.obs_distribuicao ?? "" : "");
   const [usuario, setUsuario] = useState(getUsuarioNome());
   const [salvando, setSalvando] = useState(false);
 
-  const titulo = mode === "novo" ? "Nova distribuição" : mode === "duplicar" ? "Duplicar distribuição" : "Destinar área/colaborador";
-  const legadoEditavel = mode === "novo";
+  useEffect(() => {
+    if (!colabsInicializado && colabsAtuais) {
+      setColabsSel(new Set(colabsAtuais));
+      setColabsInicializado(true);
+    }
+  }, [colabsInicializado, colabsAtuais]);
+
+  const titulo = editando ? "Destinar área/colaborador" : "Duplicar distribuição";
+  const colabsFiltrados = colaboradores.filter((c) => c.nome_colaborador.toLowerCase().includes(buscaColab.trim().toLowerCase()));
 
   function toggleColab(id: number) {
     setColabsSel((prev) => {
@@ -317,10 +341,6 @@ function DistribuirDialog({
   }
 
   async function salvar() {
-    if (mode === "novo" && !idServicoLegado.trim()) {
-      toast.error("Informe o nº do serviço (legado).");
-      return;
-    }
     setSalvando(true);
     setUsuarioNome(usuario.trim());
 
@@ -331,25 +351,25 @@ function DistribuirDialog({
     try {
       let distServicoId: number;
 
-      if (mode === "editar" && base) {
+      if (editando && row.id_dist != null) {
         const { error } = await db.from("dist_servico").update({
           id_area: idArea ? Number(idArea) : null,
           status_manual: temDestino ? "distribuido" : null,
           observacao: observacao.trim() || null,
           distribuido_por: usuario.trim() || null,
-          distribuido_em: temDestino ? agora : base.distribuido_em,
+          distribuido_em: agora,
           atualizado_em: agora,
-        }).eq("id", base.id);
+        }).eq("id", row.id_dist);
         if (error) throw error;
-        distServicoId = base.id;
+        distServicoId = row.id_dist;
         await db.from("dist_servico_colaborador").delete().eq("id_dist_servico", distServicoId);
       } else {
         const payload = {
-          id_servico_legado: mode === "novo" ? Number(idServicoLegado) : base!.id_servico_legado,
-          id_os: mode === "novo" ? (idOs.trim() ? Number(idOs) : null) : base!.id_os,
+          id_servico_legado: row.id_servico,
+          id_os: row.id_os,
           id_area: idArea ? Number(idArea) : null,
           status_manual: temDestino ? "distribuido" : null,
-          duplicado_de: mode === "duplicar" ? base!.id : null,
+          duplicado_de: mode === "duplicar" ? row.id_dist : null,
           observacao: observacao.trim() || null,
           distribuido_por: usuario.trim() || null,
           distribuido_em: temDestino ? agora : null,
@@ -365,7 +385,7 @@ function DistribuirDialog({
         if (errColab) throw errColab;
       }
 
-      distLog("info", mode === "editar" ? "DESTINAR_SERVICO" : mode === "duplicar" ? "DUPLICAR_SERVICO" : "NOVA_DISTRIBUICAO", `id_dist_servico=${distServicoId}`);
+      distLog("info", editando ? "DESTINAR_SERVICO" : "DUPLICAR_SERVICO", `id_servico=${row.id_servico} id_dist=${distServicoId}`);
       toast.success("Distribuição salva.");
       onSaved();
     } catch (err) {
@@ -384,30 +404,11 @@ function DistribuirDialog({
           <DialogTitle>{titulo}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[10px] uppercase font-semibold tracking-wider text-muted-foreground">Nº Serviço (legado)</label>
-              <Input
-                value={idServicoLegado}
-                onChange={(e) => setIdServicoLegado(e.target.value)}
-                disabled={!legadoEditavel}
-                placeholder="Ex: 12345"
-                className="h-8 text-sm mt-1"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] uppercase font-semibold tracking-wider text-muted-foreground">Nº OS</label>
-              <Input
-                value={idOs}
-                onChange={(e) => setIdOs(e.target.value)}
-                disabled={!legadoEditavel}
-                placeholder="Opcional"
-                className="h-8 text-sm mt-1"
-              />
-            </div>
-          </div>
+        <div className="text-xs text-muted-foreground -mt-2">
+          <span className="font-mono">#{row.id_servico}</span> · OS {row.id_os} · {row.servico} · {row.cliente}
+        </div>
 
+        <div className="space-y-3">
           <div>
             <label className="text-[10px] uppercase font-semibold tracking-wider text-muted-foreground">Área</label>
             <Select value={idArea || "__none"} onValueChange={(v) => setIdArea(v === "__none" ? "" : v)}>
@@ -417,13 +418,24 @@ function DistribuirDialog({
                 {areas.map((a) => <SelectItem key={a.id} value={String(a.id)} className="text-xs">{a.nome}</SelectItem>)}
               </SelectContent>
             </Select>
+            {editando && row.area_automatica && row.area && !idArea && (
+              <p className="text-[10px] text-muted-foreground mt-1">Hoje cai automático em "{row.area}" pelo código do serviço.</p>
+            )}
           </div>
 
           <div>
-            <label className="text-[10px] uppercase font-semibold tracking-wider text-muted-foreground">Colaborador(es)</label>
-            <div className="mt-1 max-h-40 overflow-y-auto border rounded-md p-2 space-y-1">
-              {colaboradores.length === 0 && <p className="text-xs text-muted-foreground py-1">Nenhum colaborador ativo cadastrado.</p>}
-              {colaboradores.map((c) => (
+            <label className="text-[10px] uppercase font-semibold tracking-wider text-muted-foreground">
+              Colaborador(es) {colabsSel.size > 0 && `(${colabsSel.size} selecionado${colabsSel.size > 1 ? "s" : ""})`}
+            </label>
+            <Input
+              value={buscaColab}
+              onChange={(e) => setBuscaColab(e.target.value)}
+              placeholder="Buscar colaborador..."
+              className="h-7 text-xs mt-1 mb-1"
+            />
+            <div className="max-h-40 overflow-y-auto border rounded-md p-2 space-y-1">
+              {colabsFiltrados.length === 0 && <p className="text-xs text-muted-foreground py-1">Nenhum colaborador encontrado.</p>}
+              {colabsFiltrados.map((c) => (
                 <label key={c.id_colaborador} className="flex items-center gap-2 py-0.5 cursor-pointer">
                   <Checkbox checked={colabsSel.has(c.id_colaborador)} onCheckedChange={() => toggleColab(c.id_colaborador)} />
                   <span className="text-xs">{c.nome_colaborador}</span>
@@ -433,7 +445,7 @@ function DistribuirDialog({
           </div>
 
           <div>
-            <label className="text-[10px] uppercase font-semibold tracking-wider text-muted-foreground">Observação</label>
+            <label className="text-[10px] uppercase font-semibold tracking-wider text-muted-foreground">Observação da distribuição</label>
             <Input value={observacao} onChange={(e) => setObservacao(e.target.value)} placeholder="Opcional" className="h-8 text-sm mt-1" />
           </div>
 

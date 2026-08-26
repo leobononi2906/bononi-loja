@@ -2,7 +2,7 @@
 // Módulo Gestão de Serviços (distribuição/precificação) — helpers, tipos e log padrão Bononi
 import { supabase } from "@/integrations/supabase/client";
 
-// Tabelas dist_* não estão no types.ts gerado — cliente sem tipagem para este módulo
+// Tabelas/views dist_*/vw_dist_* não estão no types.ts gerado — cliente sem tipagem para este módulo
 export const db = supabase as any;
 
 // Nome do usuário atual (mesmo padrão já usado em Vendas sem Faturamento) —
@@ -24,6 +24,7 @@ export interface DistArea {
 
 export type StatusManual = "parado" | "distribuido";
 
+// Overlay gravável (tabela própria) — 1 linha por atribuição de um serviço a uma área/colaborador.
 export interface DistServico {
   id: number;
   id_servico_legado: number;
@@ -47,44 +48,122 @@ export interface DistServicoColaborador {
   id_colaborador: number;
 }
 
-// ─── STATUS EFETIVO (manual > derivado do legado) ────────────────────────
-// Hoje só existe o lado manual (tabelas dist_*). Os campos do legado (ok,
-// apontamento iniciado) chegam junto com a vw_dist_servicos — a assinatura já
-// aceita esses campos opcionais pra não precisar mexer aqui de novo depois.
-export type StatusEfetivo = "aberto" | "distribuido" | "em_servico" | "finalizado" | "parado";
+// ─── vw_dist_servicos — LISTA DE DISTRIBUIÇÃO (grão = linha de serviço da OS) ─
+export type StatusDistServico = "aberto" | "distribuido" | "em_servico" | "parado" | "cancelado";
 
-export interface StatusEfetivoInput {
-  status_manual?: StatusManual | null;
-  id_area?: number | null;
-  temColaborador?: boolean;
-  legadoOk?: boolean; // ok='S' no legado — só disponível via vw_dist_servicos
-  legadoIniciado?: boolean; // tem apontamento/data_inicio — só disponível via vw_dist_servicos
+export interface DistServicoRow {
+  id_servico: number;
+  id_dist: number | null; // null = nunca distribuído (sem linha em dist_servico ainda)
+  id_os: number;
+  id_empresa: number;
+  empresa: string;
+  data_os: string; // date
+  hora_os: string; // 'HH:MM'
+  prisma: string | null;
+  os_status: string;
+  id_cliente: number;
+  cliente: string;
+  placa: string | null;
+  modelo: string | null;
+  fabricante: string | null;
+  id_servicop: number;
+  servico: string;
+  observacao: string | null; // obs do vendedor na abertura da OS
+  data_inicio: string | null;
+  hora_inicio: string | null;
+  fl_apontado: number;
+  horas_apontadas: number | null;
+  duplicado_de: number | null;
+  is_duplicado: boolean;
+  id_area: number | null;
+  area: string | null;
+  area_automatica: boolean; // true = área veio do mapa dist_area_servicop, não de override manual
+  obs_distribuicao: string | null;
+  distribuido_por: string | null;
+  distribuido_em: string | null;
+  colaboradores: string | null; // texto agregado
+  status: StatusDistServico;
 }
 
-export function deriveStatusEfetivo(s: StatusEfetivoInput): StatusEfetivo {
-  if (s.status_manual === "parado") return "parado";
-  if (s.legadoOk) return "finalizado";
-  if (s.legadoIniciado) return "em_servico";
-  if (s.status_manual === "distribuido" || s.id_area != null || s.temColaborador) return "distribuido";
-  return "aberto";
-}
-
-export const STATUS_INFO: Record<StatusEfetivo, { label: string; badgeClass: string }> = {
+export const STATUS_INFO: Record<StatusDistServico, { label: string; badgeClass: string }> = {
   aberto: { label: "Aberto", badgeClass: "b-badge-info" },
   distribuido: { label: "Distribuído", badgeClass: "b-badge-muted" },
   em_servico: { label: "Em serviço", badgeClass: "b-badge-critico" },
-  finalizado: { label: "Finalizado", badgeClass: "b-badge-ok" },
   parado: { label: "Parado", badgeClass: "b-badge-ruptura" },
+  cancelado: { label: "Cancelado", badgeClass: "b-badge-muted" },
 };
 
-export const STATUS_FILTRO: { value: StatusEfetivo | "TODOS"; label: string }[] = [
-  { value: "TODOS", label: "Todos" },
+export const STATUS_ATIVOS: StatusDistServico[] = ["aberto", "distribuido", "em_servico", "parado"];
+
+export const STATUS_FILTRO: { value: StatusDistServico | "ATIVOS" | "TODOS"; label: string }[] = [
+  { value: "ATIVOS", label: "Ativos" },
   { value: "aberto", label: "Aberto" },
   { value: "distribuido", label: "Distribuído" },
   { value: "em_servico", label: "Em serviço" },
-  { value: "finalizado", label: "Finalizado" },
   { value: "parado", label: "Parado" },
+  { value: "cancelado", label: "Cancelado" },
+  { value: "TODOS", label: "Todos" },
 ];
+
+// ─── vw_dist_precificacao — finalizados forward-only, ainda não validados ────
+export interface DistPrecificacaoRow {
+  id_servico: number;
+  id_dist: number | null;
+  id_os: number;
+  id_empresa: number;
+  empresa: string;
+  data_os: string;
+  data_fim: string | null;
+  data_conclusao: string;
+  prisma: string | null;
+  id_cliente: number;
+  cliente: string;
+  placa: string | null;
+  modelo: string | null;
+  id_servicop: number;
+  servico: string;
+  observacao: string | null;
+  horas_apontadas: number | null;
+  is_duplicado: boolean;
+  id_area: number | null;
+  area: string | null;
+  colaboradores: string | null;
+}
+
+// ─── vw_fb_os_apontamento — apontamentos de um serviço específico (detalhe do expand) ─
+export interface ApontamentoOS {
+  id_apontamento: number;
+  id_servico: number;
+  id_empresa: number;
+  id_colaborador: number;
+  colaborador: string;
+  data_apont: string;
+  hora_inicio: string;
+  hora_termino: string | null;
+  horas: number;
+}
+
+// ─── vw_dist_colab_area — colaboradores por área (Painel do Gestor) ─────────
+export interface DistColabAreaRow {
+  id_area: number;
+  area: string;
+  id_colaborador: number;
+  colaborador: string;
+  situacao: string; // 'A' = ativo (mesmo código do vw_dim_colaborador)
+  departamento: string | null;
+}
+
+export interface ColaboradorDim {
+  id_colaborador: number;
+  nome_colaborador: string;
+  situacao: string;
+  departamento: string | null;
+}
+
+export interface ServicopOption {
+  id_servicop: number;
+  servico: string;
+}
 
 // ─── LOG PADRÃO BONONI (reaproveita loja_frontend_logs — mesma tabela do app) ─
 export async function distLog(nivel: "info" | "error", mensagem: string, detalhe?: string) {
@@ -104,4 +183,11 @@ export async function distLog(nivel: "info" | "error", mensagem: string, detalhe
 export function fmtDataHora(iso: string | null | undefined): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+// "2026-08-25" → "25/08" (evita bug de timezone do new Date() em cima de campo date puro)
+export function fmtDataAbrev(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—";
+  const [, m, d] = dateStr.slice(0, 10).split("-");
+  return `${d}/${m}`;
 }
