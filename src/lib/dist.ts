@@ -15,6 +15,12 @@ export function setUsuarioNome(nome: string) {
   localStorage.setItem(USUARIO_KEY, nome);
 }
 
+// Piloto do módulo é só MLB PR — Lista de Distribuição e Precificação mostram
+// só OS dessa empresa (pedido do Leo, 26/08). id_empresa=2 em vw_dist_servicos/
+// vw_dist_precificacao (confirmado — não é o mesmo mapeamento de chdados de
+// outros sistemas Bononi, ex. Cobrança/Financeiro usam outra numeração).
+export const EMPRESA_MLB_PR = 2;
+
 export interface DistArea {
   id: number;
   nome: string;

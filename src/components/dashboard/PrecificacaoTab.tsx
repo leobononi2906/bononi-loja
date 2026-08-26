@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { TableSkeleton } from "./LoadingSkeleton";
 import { ErrorAlert } from "./ErrorAlert";
 import {
-  db, distLog, getUsuarioNome, setUsuarioNome, fmtDataAbrev, limparObservacao,
+  db, distLog, getUsuarioNome, setUsuarioNome, fmtDataAbrev, limparObservacao, EMPRESA_MLB_PR,
   type DistPrecificacaoRow, type ApontamentoOS,
 } from "@/lib/dist";
 
@@ -20,7 +20,7 @@ export function PrecificacaoTab() {
   const { data: servicos, isLoading, error } = useQuery({
     queryKey: ["vw_dist_precificacao"],
     queryFn: async () => {
-      const { data, error } = await db.from("vw_dist_precificacao").select("*").order("data_conclusao", { ascending: false }).range(0, 9999);
+      const { data, error } = await db.from("vw_dist_precificacao").select("*").eq("id_empresa", EMPRESA_MLB_PR).order("data_conclusao", { ascending: false }).range(0, 9999);
       if (error) throw error;
       return (data ?? []) as DistPrecificacaoRow[];
     },
@@ -68,7 +68,7 @@ export function PrecificacaoTab() {
           <Calculator className="h-5 w-5 text-muted-foreground" />
           <div>
             <h2 className="text-base font-semibold font-display">Precificação</h2>
-            <p className="text-xs text-muted-foreground">Serviços finalizados ainda não validados — preço é lançado direto no ERP</p>
+            <p className="text-xs text-muted-foreground">Serviços finalizados ainda não validados — preço é lançado direto no ERP (MLB PR)</p>
           </div>
         </div>
         <div className="flex items-center gap-1.5">

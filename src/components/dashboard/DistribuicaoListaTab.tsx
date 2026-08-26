@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -19,11 +19,15 @@ import { SortableHeader } from "./SortableHeader";
 import { useSortable } from "@/hooks/useSortable";
 import {
   db, distLog, getUsuarioNome, setUsuarioNome, fmtDataAbrev, limparObservacao,
-  STATUS_INFO, STATUS_ATIVOS,
+  STATUS_INFO, STATUS_ATIVOS, EMPRESA_MLB_PR,
   type DistArea, type DistServicoRow, type ColaboradorDim, type StatusDistServico,
 } from "@/lib/dist";
 
 type DialogMode = "editar" | "duplicar";
+
+// Colaborador de fallback (apontamento do legado, quando o serviço nunca foi
+// destinado por aqui) — enriquecido em servicosEnriquecidos.
+type ServicoComFallback = DistServicoRow & { colaboradoresFallback: boolean };
 
 interface DialogState {
   mode: DialogMode;
@@ -77,6 +81,7 @@ export function DistribuicaoListaTab() {
       const { data, error } = await db
         .from("vw_dist_servicos")
         .select("*")
+        .eq("id_empresa", EMPRESA_MLB_PR)
         .order("data_os", { ascending: false })
         .order("hora_os", { ascending: false })
         .range(0, 9999);
@@ -85,12 +90,52 @@ export function DistribuicaoListaTab() {
     },
   });
 
-  const isLoading = loadingAreas || loadingColabs || loadingServicos;
   const areasList = Array.isArray(areas) ? areas : [];
   const colabsList = Array.isArray(colaboradores) ? colaboradores : [];
   const servicosList = Array.isArray(servicos) ? servicos : [];
 
-  const filtradas = servicosList.filter((l) => {
+  // Serviço "em serviço" pode nunca ter sido destinado por aqui (mecânico só
+  // começou a apontar direto no legado) — nesse caso busca o colaborador do
+  // apontamento (vw_fb_os_apontamento) como fallback, marcado "(apontamento)"
+  // pra não confundir com uma distribuição de verdade.
+  const idsSemColab = useMemo(
+    () => servicosList.filter((s) => s.fl_apontado === 1 && !s.colaboradores).map((s) => s.id_servico),
+    [servicosList]
+  );
+
+  const { data: apontamentosColab, isLoading: loadingApontColab } = useQuery({
+    queryKey: ["vw_fb_os_apontamento_colabs", idsSemColab],
+    queryFn: async () => {
+      const { data, error } = await db.from("vw_fb_os_apontamento").select("id_servico, colaborador").in("id_servico", idsSemColab);
+      if (error) throw error;
+      return (data ?? []) as { id_servico: number; colaborador: string | null }[];
+    },
+    enabled: idsSemColab.length > 0,
+  });
+
+  const colabsApontamentoMap = useMemo(() => {
+    const map = new Map<number, string>();
+    (apontamentosColab ?? []).forEach((a) => {
+      if (!a.colaborador) return;
+      const nomes = new Set((map.get(a.id_servico) ?? "").split(", ").filter(Boolean));
+      nomes.add(a.colaborador);
+      map.set(a.id_servico, Array.from(nomes).sort().join(", "));
+    });
+    return map;
+  }, [apontamentosColab]);
+
+  const servicosEnriquecidos = useMemo(
+    () =>
+      servicosList.map((s) => {
+        const fallback = !s.colaboradores && colabsApontamentoMap.has(s.id_servico);
+        return { ...s, colaboradores: s.colaboradores || colabsApontamentoMap.get(s.id_servico) || null, colaboradoresFallback: fallback };
+      }),
+    [servicosList, colabsApontamentoMap]
+  );
+
+  const isLoading = loadingAreas || loadingColabs || loadingServicos || (idsSemColab.length > 0 && loadingApontColab);
+
+  const filtradas = servicosEnriquecidos.filter((l) => {
     if (!statusAtivos.has(l.status)) return false;
     if (areaFiltro === "SEM_AREA" && l.id_area != null) return false;
     if (areaFiltro !== "TODOS" && areaFiltro !== "SEM_AREA" && String(l.id_area ?? "") !== areaFiltro) return false;
@@ -153,7 +198,7 @@ export function DistribuicaoListaTab() {
         <ClipboardList className="h-5 w-5 text-muted-foreground" />
         <div>
           <h2 className="text-base font-semibold font-display">Lista de Distribuição</h2>
-          <p className="text-xs text-muted-foreground">Serviços lançados na OS pelo vendedor — destine por área e colaborador</p>
+          <p className="text-xs text-muted-foreground">Serviços lançados na OS pelo vendedor — destine por área e colaborador (MLB PR)</p>
         </div>
       </div>
 
@@ -260,7 +305,10 @@ export function DistribuicaoListaTab() {
                       {row.area ?? "—"}
                       {row.area_automatica && row.area && <span className="text-[10px] text-muted-foreground ml-1">(auto)</span>}
                     </td>
-                    <td className="text-xs min-w-0 max-w-[180px] truncate" title={row.colaboradores ?? ""}>{row.colaboradores || "—"}</td>
+                    <td className="text-xs min-w-0 max-w-[180px] truncate" title={row.colaboradores ?? ""}>
+                      {row.colaboradores || "—"}
+                      {row.colaboradoresFallback && <span className="text-[10px] text-muted-foreground ml-1">(apontamento)</span>}
+                    </td>
                     <td><span className={`b-badge ${info.badgeClass}`}>{info.label}</span></td>
                     <td onClick={(e) => e.stopPropagation()}>
                       {row.status !== "cancelado" && (
@@ -325,7 +373,7 @@ export function DistribuicaoListaTab() {
       {osAberta && (
         <OsServicosDialog
           idOs={osAberta.id_os}
-          servicos={servicosList.filter((s) => s.id_os === osAberta.id_os && s.id_empresa === osAberta.id_empresa)}
+          servicos={servicosEnriquecidos.filter((s) => s.id_os === osAberta.id_os && s.id_empresa === osAberta.id_empresa)}
           onClose={() => setOsAberta(null)}
         />
       )}
@@ -337,7 +385,7 @@ function OsServicosDialog({
   idOs, servicos, onClose,
 }: {
   idOs: number;
-  servicos: DistServicoRow[];
+  servicos: ServicoComFallback[];
   onClose: () => void;
 }) {
   const empresa = servicos[0]?.empresa ?? "";
@@ -353,15 +401,20 @@ function OsServicosDialog({
         <div className="space-y-1 max-h-[60vh] overflow-y-auto">
           {servicos.map((s) => {
             const info = STATUS_INFO[s.status];
+            const obsServico = limparObservacao(s.observacao);
             return (
               <div key={s.id_dist ?? -s.id_servico} className="border rounded-md p-2 space-y-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium">{s.servico}</span>
                   <span className={`b-badge ${info.badgeClass} shrink-0`}>{info.label}</span>
                 </div>
+                {obsServico && <p className="text-xs text-muted-foreground">{obsServico}</p>}
                 <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3">
                   <span>Área: {s.area ?? "—"}</span>
-                  <span>Colaborador(es): {s.colaboradores || "—"}</span>
+                  <span>
+                    Colaborador(es): {s.colaboradores || "—"}
+                    {s.colaboradoresFallback && <span className="text-[10px] ml-1">(apontamento)</span>}
+                  </span>
                 </div>
               </div>
             );
