@@ -188,13 +188,28 @@ export function fmtDataAbrev(dateStr: string | null | undefined): string {
   return `${d}/${m}`;
 }
 
-// TBL_SERVICO.DESCRICAO é BLOB SUB_TYPE BLR (não é texto de verdade — é um tipo
-// interno do Firebird) — em ~20% dos serviços a extração devolve o erro do driver
-// em vez do texto ("*** blr version ... is not supported ***"). Filtra esse lixo
-// antes de mostrar; a extração de verdade é assunto do cérebro, não dá pra
-// consertar aqui.
+// TBL_SERVICO.DESCRICAO é o campo certo (confirmado 26/08 lendo direto da produção,
+// só leitura, via node-firebird em bononi-replicador) — é RTF puro salvo pelo
+// sistema antigo, tipo:
+//   {\rtf1\ansi\ansicpg1252...{\fonttbl{...}}\viewkind4\uc1\pard\f0\fs16 TEXTO\par}
+// A extração do cérebro ainda não decodifica esse blob direito (erro do driver
+// "*** blr version ... is not supported ***" em ~20% dos casos) — reportado.
+// Enquanto isso, `limparObservacao` já sabe: (1) descartar a string de erro,
+// (2) despir o RTF pro texto puro, pra já funcionar assim que a extração for
+// corrigida (a coluna vai chegar como esse RTF cru, não como texto limpo).
+function rtfParaTexto(rtf: string): string {
+  return rtf
+    .replace(/\{\\fonttbl\{[^}]*\}\}/g, "")
+    .replace(/\\par\b/g, "\n")
+    .replace(/\\'([0-9a-fA-F]{2})/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16))) // windows-1252 ~= latin-1 nessa faixa
+    .replace(/\\[a-zA-Z]+-?\d*\s?/g, "")
+    .replace(/[{}]/g, "")
+    .trim();
+}
+
 export function limparObservacao(obs: string | null | undefined): string | null {
   if (!obs) return null;
   if (obs.includes("blr version") || obs.trimStart().startsWith("***")) return null;
-  return obs;
+  const texto = obs.trimStart().startsWith("{\\rtf") ? rtfParaTexto(obs) : obs;
+  return texto || null;
 }
