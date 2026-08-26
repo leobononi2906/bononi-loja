@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { TableSkeleton } from "./LoadingSkeleton";
 import { ErrorAlert } from "./ErrorAlert";
 import {
-  db, distLog, getUsuarioNome, setUsuarioNome, fmtDataAbrev,
+  db, distLog, getUsuarioNome, setUsuarioNome, fmtDataAbrev, limparObservacao,
   type DistPrecificacaoRow, type ApontamentoOS,
 } from "@/lib/dist";
 
@@ -174,7 +174,7 @@ function ExpansibleRow({
       {aberta && (
         <tr>
           <td colSpan={12} className="bg-muted/20 text-xs px-4 py-2">
-            {row.observacao && <p className="mb-2"><span className="font-semibold text-muted-foreground">Observação: </span>{row.observacao}</p>}
+            {limparObservacao(row.observacao) && <p className="mb-2"><span className="font-semibold text-muted-foreground">Observação: </span>{limparObservacao(row.observacao)}</p>}
             {isLoading ? (
               <p className="text-muted-foreground">Carregando apontamentos...</p>
             ) : !apontamentos || apontamentos.length === 0 ? (

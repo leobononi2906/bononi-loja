@@ -16,8 +16,8 @@ import {
 import { TableSkeleton } from "./LoadingSkeleton";
 import { ErrorAlert } from "./ErrorAlert";
 import {
-  db, distLog, getUsuarioNome, setUsuarioNome, fmtDataAbrev,
-  STATUS_INFO, STATUS_ATIVOS, STATUS_FILTRO,
+  db, distLog, getUsuarioNome, setUsuarioNome, fmtDataAbrev, limparObservacao,
+  STATUS_INFO, STATUS_ATIVOS,
   type DistArea, type DistServicoRow, type ColaboradorDim, type StatusDistServico,
 } from "@/lib/dist";
 
@@ -28,9 +28,17 @@ interface DialogState {
   row: DistServicoRow;
 }
 
+const STATUS_CHIPS: { value: StatusDistServico; label: string }[] = [
+  { value: "aberto", label: "Aberto" },
+  { value: "distribuido", label: "Distribuído" },
+  { value: "em_servico", label: "Em serviço" },
+  { value: "parado", label: "Parado" },
+  { value: "cancelado", label: "Cancelado" },
+];
+
 export function DistribuicaoListaTab() {
   const qc = useQueryClient();
-  const [statusFiltro, setStatusFiltro] = useState<StatusDistServico | "ATIVOS" | "TODOS">("ATIVOS");
+  const [statusAtivos, setStatusAtivos] = useState<Set<StatusDistServico>>(new Set(STATUS_ATIVOS));
   const [areaFiltro, setAreaFiltro] = useState<string>("TODOS");
   const [colabFiltro, setColabFiltro] = useState<string>("TODOS");
   const [busca, setBusca] = useState("");
@@ -80,11 +88,7 @@ export function DistribuicaoListaTab() {
   const servicosList = Array.isArray(servicos) ? servicos : [];
 
   const filtradas = servicosList.filter((l) => {
-    if (statusFiltro === "ATIVOS") {
-      if (!STATUS_ATIVOS.includes(l.status)) return false;
-    } else if (statusFiltro !== "TODOS" && l.status !== statusFiltro) {
-      return false;
-    }
+    if (!statusAtivos.has(l.status)) return false;
     if (areaFiltro === "SEM_AREA" && l.id_area != null) return false;
     if (areaFiltro !== "TODOS" && areaFiltro !== "SEM_AREA" && String(l.id_area ?? "") !== areaFiltro) return false;
     if (colabFiltro !== "TODOS") {
@@ -101,11 +105,19 @@ export function DistribuicaoListaTab() {
       (l.placa ?? "").toLowerCase().includes(q) ||
       (l.modelo ?? "").toLowerCase().includes(q) ||
       (l.servico ?? "").toLowerCase().includes(q) ||
-      (l.observacao ?? "").toLowerCase().includes(q) ||
+      (limparObservacao(l.observacao) ?? "").toLowerCase().includes(q) ||
       (l.area ?? "").toLowerCase().includes(q) ||
       (l.colaboradores ?? "").toLowerCase().includes(q)
     );
   });
+
+  function toggleStatus(s: StatusDistServico) {
+    setStatusAtivos((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s); else next.add(s);
+      return next;
+    });
+  }
 
   async function toggleParado(row: DistServicoRow) {
     const parado = row.status === "parado";
@@ -140,14 +152,25 @@ export function DistribuicaoListaTab() {
         </div>
       </div>
 
+      {/* Filtro de status — chips clicáveis (default: os 4 ativos; Cancelado só quando clicado) */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {STATUS_CHIPS.map((s) => {
+          const ativo = statusAtivos.has(s.value);
+          return (
+            <button
+              key={s.value}
+              onClick={() => toggleStatus(s.value)}
+              className={`b-badge ${STATUS_INFO[s.value].badgeClass} cursor-pointer transition-opacity ${ativo ? "" : "opacity-30 hover:opacity-70"}`}
+              title={ativo ? "Clique pra esconder" : "Clique pra mostrar"}
+            >
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={statusFiltro} onValueChange={(v) => setStatusFiltro(v as StatusDistServico | "ATIVOS" | "TODOS")}>
-          <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {STATUS_FILTRO.map((s) => <SelectItem key={s.value} value={s.value} className="text-xs">{s.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
         <Select value={areaFiltro} onValueChange={setAreaFiltro}>
           <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue placeholder="Área" /></SelectTrigger>
           <SelectContent>
@@ -198,7 +221,8 @@ export function DistribuicaoListaTab() {
               const parado = row.status === "parado";
               const chave = row.id_dist ?? -row.id_servico; // chave única mesmo sem id_dist ainda
               const aberta = expandido === chave;
-              const temDetalhe = !!(row.observacao || row.obs_distribuicao || row.distribuido_por);
+              const obs = limparObservacao(row.observacao);
+              const temDetalhe = !!(obs || row.obs_distribuicao || row.distribuido_por);
               return (
                 <Fragment key={chave}>
                   <tr className={row.is_duplicado ? "bg-muted/20" : undefined}>
@@ -219,7 +243,12 @@ export function DistribuicaoListaTab() {
                     <td className="text-xs min-w-0 max-w-[180px] truncate" title={row.cliente}>{row.cliente}</td>
                     <td className="text-xs font-mono whitespace-nowrap">{row.placa ?? "—"}</td>
                     <td className="text-xs min-w-0 max-w-[140px] truncate" title={row.modelo ?? ""}>{row.modelo ?? "—"}</td>
-                    <td className="text-xs min-w-0 max-w-[180px] truncate" title={row.servico}>{row.servico}</td>
+                    <td className="text-xs min-w-0 max-w-[220px]">
+                      <div className="truncate" title={row.servico}>{row.servico}</div>
+                      {obs && (
+                        <div className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5" title={obs}>{obs}</div>
+                      )}
+                    </td>
                     <td className="text-xs whitespace-nowrap">
                       {row.area ?? "—"}
                       {row.area_automatica && row.area && <span className="text-[10px] text-muted-foreground ml-1">(auto)</span>}
@@ -248,7 +277,7 @@ export function DistribuicaoListaTab() {
                   {aberta && temDetalhe && (
                     <tr>
                       <td colSpan={13} className="bg-muted/20 text-xs px-4 py-2 space-y-1">
-                        {row.observacao && <p><span className="font-semibold text-muted-foreground">Obs. do vendedor: </span>{row.observacao}</p>}
+                        {obs && <p><span className="font-semibold text-muted-foreground">Obs. do vendedor: </span>{obs}</p>}
                         {row.obs_distribuicao && <p><span className="font-semibold text-muted-foreground">Obs. da distribuição: </span>{row.obs_distribuicao}</p>}
                         {row.distribuido_por && (
                           <p className="text-muted-foreground">

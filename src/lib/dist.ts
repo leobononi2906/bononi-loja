@@ -95,16 +95,6 @@ export const STATUS_INFO: Record<StatusDistServico, { label: string; badgeClass:
 
 export const STATUS_ATIVOS: StatusDistServico[] = ["aberto", "distribuido", "em_servico", "parado"];
 
-export const STATUS_FILTRO: { value: StatusDistServico | "ATIVOS" | "TODOS"; label: string }[] = [
-  { value: "ATIVOS", label: "Ativos" },
-  { value: "aberto", label: "Aberto" },
-  { value: "distribuido", label: "Distribuído" },
-  { value: "em_servico", label: "Em serviço" },
-  { value: "parado", label: "Parado" },
-  { value: "cancelado", label: "Cancelado" },
-  { value: "TODOS", label: "Todos" },
-];
-
 // ─── vw_dist_precificacao — finalizados forward-only, ainda não validados ────
 export interface DistPrecificacaoRow {
   id_servico: number;
@@ -190,4 +180,15 @@ export function fmtDataAbrev(dateStr: string | null | undefined): string {
   if (!dateStr) return "—";
   const [, m, d] = dateStr.slice(0, 10).split("-");
   return `${d}/${m}`;
+}
+
+// TBL_SERVICO.DESCRICAO é BLOB SUB_TYPE BLR (não é texto de verdade — é um tipo
+// interno do Firebird) — em ~20% dos serviços a extração devolve o erro do driver
+// em vez do texto ("*** blr version ... is not supported ***"). Filtra esse lixo
+// antes de mostrar; a extração de verdade é assunto do cérebro, não dá pra
+// consertar aqui.
+export function limparObservacao(obs: string | null | undefined): string | null {
+  if (!obs) return null;
+  if (obs.includes("blr version") || obs.trimStart().startsWith("***")) return null;
+  return obs;
 }
