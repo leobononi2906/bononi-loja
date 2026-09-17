@@ -46,7 +46,7 @@ interface Props {
 export function AppSidebar({ onClose }: Props) {
   return (
     <aside
-      className="flex flex-col w-[240px] h-full"
+      className="flex flex-col w-[232px] h-full"
       style={{ background: "hsl(var(--sidebar-background))" }}
     >
       {/* Brand */}

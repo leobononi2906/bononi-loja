@@ -65,7 +65,7 @@ export function AppShell() {
         </div>
 
         {/* Conteúdo */}
-        <div className="lg:pl-[240px]">
+        <div className="lg:pl-[232px]">
           <TopBar
             filters={filters}
             onChange={setFilters}

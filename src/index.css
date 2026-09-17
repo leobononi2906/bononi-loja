@@ -208,8 +208,11 @@
     background: rgba(255, 255, 255, 0.06);
   }
   .b-nav-item.active {
-    background: rgba(0, 170, 238, 0.18);
-    color: hsl(var(--blue-light));
+    /* rgba(0,170,238,...) era azul solto, sobra de antes do --blue-light virar o
+       vermelho reverso da marca (só o texto/régua tinham sido migrados). Fundo
+       raso em branco + régua vermelha, como Expedição/Frete/Cobrança. */
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
     box-shadow: inset 3px 0 0 hsl(var(--blue-light));
   }
   .b-nav-label {
