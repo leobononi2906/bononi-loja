@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Users, Wrench, ParkingCircle, Scissors, Boxes, Settings2, Tag, Gauge, AlertTriangle, X, ClipboardList, LayoutGrid, Calculator, MapPin, Bell } from "lucide-react";
+import { LayoutDashboard, Users, Wrench, ParkingCircle, Scissors, Settings2, Tag, Gauge, AlertTriangle, X, ClipboardList, LayoutGrid, Calculator, MapPin, Bell } from "lucide-react";
+import logoBononiReverse from "@/assets/logo-bononi-reverse.png";
 
 const groups = [
   {
@@ -50,15 +51,10 @@ export function AppSidebar({ onClose }: Props) {
     >
       {/* Brand */}
       <div className="px-5 py-5 flex items-center justify-between border-b" style={{ borderColor: "hsl(var(--sidebar-border))" }}>
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: "hsl(var(--blue-light))" }}>
-            <Boxes className="h-5 w-5 text-white" strokeWidth={2.5} />
-          </div>
-          <div className="min-w-0">
-            <div className="text-white font-bold tracking-tight text-[15px] leading-tight">BONONI</div>
-            <div className="text-[9px] font-semibold uppercase tracking-[0.16em]" style={{ color: "rgba(255,255,255,0.5)" }}>
-              Dashboard Loja
-            </div>
+        <div className="min-w-0">
+          <img src={logoBononiReverse} alt="Bononi Acessórios" className="h-[26px] w-auto" />
+          <div className="mt-1.5 text-[9px] font-semibold uppercase tracking-[0.16em]" style={{ color: "rgba(255,255,255,0.5)" }}>
+            Dashboard Loja
           </div>
         </div>
         {onClose && (

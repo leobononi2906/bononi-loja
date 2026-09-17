@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400..800;1,400..800&family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -7,111 +7,111 @@
 
 @layer base {
   :root {
-    /* === BONONI Design System (HSL) === */
-    /* Backgrounds */
-    --background: 218 30% 96%;            /* #F0F3F8 */
-    --foreground: 217 56% 13%;            /* #0F1D35 */
+    /* === BONONI Design System (sistemas internos) — ponte de variáveis === */
+    /* Backgrounds — bnn-gray-50 / bnn-ink-800 */
+    --background: 210 29% 97%;            /* #F6F8FA */
+    --foreground: 220 16% 15%;            /* #1F232B */
 
     --card: 0 0% 100%;                    /* #FFFFFF */
-    --card-foreground: 217 56% 13%;
-    --surface2: 215 38% 97%;              /* #F7F9FC */
+    --card-foreground: 220 16% 15%;
+    --surface2: 214 26% 95%;              /* #EEF1F5 — bnn-gray-100 */
 
     --popover: 0 0% 100%;
-    --popover-foreground: 217 56% 13%;
+    --popover-foreground: 220 16% 15%;
 
-    /* Bononi blues */
-    --primary: 222 70% 33%;               /* #1A3A8F */
+    /* Ação primária é tinta, não vermelha — bnn-ink-900 */
+    --primary: 220 13% 9%;                /* #14161A */
     --primary-foreground: 0 0% 100%;
-    --blue-mid: 204 100% 40%;             /* #0077CC */
-    --blue-light: 196 100% 47%;           /* #00AAEE */
-    --blue-pale: 205 89% 95%;             /* #E8F4FD */
+    --blue-mid: 213 65% 33%;              /* #1D4E89 — status-info-text */
+    --blue-light: 357 85% 52%;            /* #ED1D26 — vermelho reverso, só sobre fundo escuro */
+    --blue-pale: 214 53% 94%;             /* #E8EFF8 — status-info-bg */
 
-    --secondary: 218 30% 92%;
-    --secondary-foreground: 217 56% 13%;
+    --secondary: 214 26% 95%;
+    --secondary-foreground: 220 16% 15%;
 
-    --muted: 215 38% 95%;
-    --muted-foreground: 217 18% 44%;      /* #5A6A85 */
-    --text-muted: 220 15% 67%;            /* #9AA5B8 */
+    --muted: 214 26% 95%;
+    --muted-foreground: 219 10% 46%;      /* #6B7382 — bnn-gray-500 */
+    --text-muted: 218 12% 64%;            /* #98A0AE — bnn-gray-400 */
 
-    --accent: 196 100% 47%;
+    --accent: 358 72% 44%;                /* #C11F25 — bnn-red-500, acento único por tela */
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 4 70% 50%;             /* #D93025 */
+    --destructive: 358 75% 35%;           /* #9E171C — action-danger */
     --destructive-foreground: 0 0% 100%;
-    --destructive-bg: 4 81% 96%;          /* #FEF0EF */
+    --destructive-bg: 0 81% 96%;          /* #FDECEC */
 
-    --success: 158 87% 34%;               /* #0F9D6E */
+    --success: 150 72% 29%;               /* #157F4A */
     --success-foreground: 0 0% 100%;
-    --success-bg: 158 60% 94%;            /* #E8F8F3 */
+    --success-bg: 146 39% 93%;            /* #E6F4EC */
 
-    --warning: 32 100% 44%;               /* #E07B00 */
+    --warning: 36 71% 42%;                /* #B7791F */
     --warning-foreground: 0 0% 100%;
-    --warning-bg: 38 92% 95%;             /* #FEF5E7 */
+    --warning-bg: 37 87% 94%;             /* #FDF3E3 */
 
-    --yellow: 30 91% 36%;                 /* #B45309 */
-    --yellow-bg: 48 100% 96%;             /* #FFFBEB */
+    --yellow: 36 71% 35%;                 /* variação mais escura do âmbar, para "estoque baixo" */
+    --yellow-bg: 37 87% 94%;              /* #FDF3E3 */
 
-    --info: 204 100% 40%;
+    --info: 213 65% 33%;                  /* #1D4E89 */
     --info-foreground: 0 0% 100%;
 
-    --border: 215 32% 92%;                /* #E2E8F2 */
-    --input: 215 32% 92%;
-    --ring: 222 70% 33%;
+    --border: 216 19% 90%;                /* #E0E4EA — bnn-gray-200 */
+    --input: 216 19% 90%;
+    --ring: 220 13% 9%;                   /* anel de foco em tinta, nunca azul */
 
-    --radius: 0.75rem;                    /* 12px */
-    --radius-sm: 0.5rem;                  /* 8px */
+    --radius: 0.5rem;                     /* 8px — cartões, modais */
+    --radius-sm: 0.1875rem;               /* 3px — chips, checkbox */
 
-    --chart-revenue: 222 70% 33%;
-    --chart-services: 158 87% 34%;
-    --chart-margin: 32 100% 44%;
-    --chart-growth-up: 158 87% 34%;
-    --chart-growth-down: 4 70% 50%;
+    --chart-revenue: 358 72% 44%;
+    --chart-services: 213 65% 33%;
+    --chart-margin: 36 71% 42%;
+    --chart-growth-up: 150 72% 29%;
+    --chart-growth-down: 358 75% 35%;
 
-    /* Sidebar: deep Bononi blue */
-    --sidebar-background: 222 70% 33%;
+    /* Sidebar: navegação em tinta, aceso vermelho no rule ativo */
+    --sidebar-background: 220 13% 9%;     /* #14161A */
     --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 196 100% 47%;
+    --sidebar-primary: 358 72% 44%;       /* #C11F25 */
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 222 60% 28%;
+    --sidebar-accent: 220 16% 15%;        /* #1F232B — hover, um degrau mais claro */
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 222 50% 25%;
-    --sidebar-ring: 196 100% 47%;
+    --sidebar-border: 220 15% 20%;        /* #2C313B */
+    --sidebar-ring: 358 72% 44%;
 
-    --font-display: 'DM Sans', sans-serif;
-    --font-body: 'DM Sans', sans-serif;
-    --font-mono: 'DM Mono', ui-monospace, monospace;
+    --font-display: 'Archivo', 'Arial Narrow', Helvetica, sans-serif;
+    --font-body: 'Barlow', 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
   }
 
   .dark {
-    --background: 220 30% 8%;
-    --foreground: 0 0% 95%;
-    --card: 220 25% 12%;
-    --card-foreground: 0 0% 95%;
-    --surface2: 220 25% 14%;
-    --popover: 220 25% 12%;
-    --popover-foreground: 0 0% 95%;
-    --primary: 222 70% 55%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 20% 18%;
-    --secondary-foreground: 0 0% 95%;
-    --muted: 220 20% 16%;
-    --muted-foreground: 220 10% 65%;
-    --text-muted: 220 10% 55%;
-    --accent: 196 100% 50%;
+    --background: 220 13% 9%;
+    --foreground: 214 26% 95%;
+    --card: 220 16% 15%;
+    --card-foreground: 214 26% 95%;
+    --surface2: 220 15% 20%;
+    --popover: 220 16% 15%;
+    --popover-foreground: 214 26% 95%;
+    --primary: 0 0% 100%;
+    --primary-foreground: 220 13% 9%;
+    --secondary: 220 15% 20%;
+    --secondary-foreground: 214 26% 95%;
+    --muted: 220 15% 20%;
+    --muted-foreground: 218 12% 64%;
+    --text-muted: 219 10% 46%;
+    --accent: 357 85% 52%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 4 70% 55%;
+    --destructive: 358 72% 44%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 20% 20%;
-    --input: 220 20% 20%;
-    --ring: 222 70% 55%;
-    --sidebar-background: 222 60% 10%;
-    --sidebar-foreground: 0 0% 90%;
-    --sidebar-primary: 196 100% 50%;
+    --border: 220 15% 25%;
+    --input: 220 15% 25%;
+    --ring: 0 0% 100%;
+    --sidebar-background: 220 16% 6%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 357 85% 52%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 222 50% 16%;
+    --sidebar-accent: 220 15% 14%;
     --sidebar-accent-foreground: 0 0% 95%;
-    --sidebar-border: 222 50% 18%;
-    --sidebar-ring: 196 100% 50%;
+    --sidebar-border: 220 15% 18%;
+    --sidebar-ring: 357 85% 52%;
   }
 }
 
