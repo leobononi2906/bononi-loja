@@ -1,6 +1,6 @@
 # STATUS — Loja Física (bononi-loja)
 
-> Atualizado: 2026-09-17 (22)
+> Atualizado: 2026-09-24
 
 ## O que é
 Dashboard de gestão da **loja física**: acompanhamento de vendas, serviços (pátio e tapeçaria), planograma de gôndola e ordens de **tacógrafo** (com upload de documentos).
@@ -94,6 +94,12 @@ React + **TypeScript** + Vite + Tailwind + **shadcn/ui** + react-router-dom. Cli
 - Tacógrafo — dossiê PDF (`taco-pdf.ts`): fotos (`FOTO_TACOGRAFO*`/`DISCO_*`) já vêm comprimidas no upload (`comprimirImagem`, maxDim 1600, JPEG q=0.82), mas PDF anexado (CRLV/comprovante) é copiado **cru** com `pdf.copyPages` — é o maior risco de estourar o teto de 10MB do dossiê final. Por isso o upload de PDF (não-imagem) trava em 8MB (`MAX_PDF_ANEXO_MB` em `TacografoOrdem.tsx`) e o `gerarDossiePdf` checa o tamanho final e lança erro amigável se passar de 10MB — não tenta recomprimir automaticamente (pdf-lib não faz downsampling de página copiada).
 
 ## Dev-log
+- 2026-09-24 — **Service worker novo: pega versão nova sozinho, sem F5.** App Vite/React sem
+  service worker. `public/sw.js` novo (network-first pra navegação/`index.html`, cache
+  permanente pra `/assets/*` hasheado, ignora chamadas a Supabase/outra origem), `src/lib/pwa.ts`
+  registra e recarrega sozinho no `controllerchange` (importado em `src/main.tsx`, pulado em
+  dev). `vercel.json` ganhou `Cache-Control: no-cache` em `index.html`/`sw.js`. Roteamento já
+  mantinha a tela pela URL — não mexido. Modelo copiado do `bononi-exped`.
 - 2026-09-17 (22) — **Sidebar com sobra de azul e largura fora do padrão.** O item ativo tinha
   `background: rgba(0,170,238,.18)` — azul cru, hardcoded, sobra de antes do `--blue-light`
   virar o vermelho reverso da marca (só a régua e o texto tinham sido migrados, o fundo não).
