@@ -1,8 +1,38 @@
-import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Users, Wrench, ParkingCircle, Scissors, Settings2, Tag, Gauge, AlertTriangle, X, ClipboardList, LayoutGrid, Calculator, MapPin, Bell } from "lucide-react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import {
+  LayoutDashboard, Users, Wrench, ParkingCircle, Scissors, Settings2, Tag, Gauge, AlertTriangle, X,
+  ClipboardList, LayoutGrid, Calculator, MapPin, Bell, type LucideIcon,
+} from "lucide-react";
 import logoBononiReverse from "@/assets/logo-bononi-reverse.png";
+import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
+import { EMPRESA_MLB_PR } from "@/lib/dist";
 
-const groups = [
+// Views vw_dist_servicos/vw_taco_venc_pendentes não estão no types.ts gerado —
+// mesmo padrão de src/lib/dist.ts e src/lib/taco.ts (cliente sem tipagem aqui).
+const db = supabase as any;
+
+// Selos de contagem no menu — mesma fila que o sino de pendências do Hub conta
+// (link ?abrir=... não existe aqui: este app não tem tela única de "abrir na fila",
+// cada link do sino já aponta pra rota certa via react-router).
+type SeloKey = "distribuicao" | "taco_vencimentos";
+
+interface NavItem {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  end?: boolean;
+  seloKey?: SeloKey;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const groups: NavGroup[] = [
   {
     label: "Vendas",
     items: [
@@ -25,13 +55,13 @@ const groups = [
     items: [
       { to: "/gondola", label: "Gôndola", icon: Tag, end: true },
       { to: "/tacografo", label: "Tacógrafo", icon: Gauge },
-      { to: "/tacografo-vencimentos", label: "Vencimentos", icon: Bell },
+      { to: "/tacografo-vencimentos", label: "Vencimentos", icon: Bell, seloKey: "taco_vencimentos" },
     ],
   },
   {
     label: "Gestão de Serviços",
     items: [
-      { to: "/gestao-servicos/distribuicao", label: "Lista de Distribuição", icon: ClipboardList },
+      { to: "/gestao-servicos/distribuicao", label: "Lista de Distribuição", icon: ClipboardList, seloKey: "distribuicao" },
       { to: "/gestao-servicos/painel", label: "Painel do Gestor", icon: LayoutGrid },
       { to: "/gestao-servicos/precificacao", label: "Precificação", icon: Calculator },
       { to: "/gestao-servicos/areas", label: "Config. Áreas", icon: MapPin },
@@ -44,6 +74,35 @@ interface Props {
 }
 
 export function AppSidebar({ onClose }: Props) {
+  const location = useLocation();
+  const [selos, setSelos] = useState<Partial<Record<SeloKey, number>>>({});
+
+  // Contagem leve (head + count=exact, sem baixar linha nenhuma). Recalcula ao
+  // montar a sidebar e a cada troca de rota (a sidebar é da casca do AppShell,
+  // não remonta sozinha ao navegar). Silencioso em erro — selo não pode derrubar
+  // a navegação por falha de rede.
+  useEffect(() => {
+    let cancelado = false;
+    async function carregarSelos() {
+      try {
+        const [dist, taco] = await Promise.all([
+          // só MLB PR, igual à Lista de Distribuição (src/lib/dist.ts)
+          db.from("vw_dist_servicos").select("*", { count: "exact", head: true }).eq("status", "aberto").eq("id_empresa", EMPRESA_MLB_PR),
+          db.from("vw_taco_venc_pendentes").select("*", { count: "exact", head: true }),
+        ]);
+        if (cancelado) return;
+        setSelos({
+          distribuicao: dist.error ? undefined : dist.count ?? undefined,
+          taco_vencimentos: taco.error ? undefined : taco.count ?? undefined,
+        });
+      } catch {
+        // idem — falha de rede não aparece na tela, só o selo fica sem número
+      }
+    }
+    carregarSelos();
+    return () => { cancelado = true; };
+  }, [location.pathname]);
+
   return (
     <aside
       className="flex flex-col w-[232px] h-full"
@@ -71,6 +130,7 @@ export function AppSidebar({ onClose }: Props) {
             <div className="b-nav-label">{g.label}</div>
             {g.items.map((item) => {
               const Icon = item.icon;
+              const selo = item.seloKey ? selos[item.seloKey] : undefined;
               return (
                 <NavLink
                   key={item.to}
@@ -81,6 +141,14 @@ export function AppSidebar({ onClose }: Props) {
                 >
                   <Icon className="h-4 w-4" />
                   <span>{item.label}</span>
+                  {!!selo && (
+                    <Badge
+                      variant="secondary"
+                      className="ml-auto h-5 min-w-[20px] shrink-0 justify-center rounded-full px-1 text-[10px] font-bold leading-none"
+                    >
+                      {selo > 99 ? "99+" : selo}
+                    </Badge>
+                  )}
                 </NavLink>
               );
             })}
