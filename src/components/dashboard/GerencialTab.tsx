@@ -8,6 +8,7 @@ import { SortableHeader } from "./SortableHeader";
 import { useSortable } from "@/hooks/useSortable";
 import { useViewData } from "@/hooks/useComercialData";
 import { formatCurrency, formatCurrencyInt, type DashboardFilters } from "@/data/mockData";
+import { osFatLiquido } from "@/lib/os-fat";
 
 interface Props { filters: DashboardFilters; }
 
@@ -68,8 +69,9 @@ export function GerencialTab({ filters }: Props) {
 
   // Fat. Serviços / Peças (totalizador oficial vw_os_res_fat)
   const osResData = osRes.data ?? [];
-  const faturamentoServicos = osResData.reduce((s, r) => s + (Number(r.fat_servicos) || 0), 0);
-  const faturamentoPecas = osResData.reduce((s, r) => s + (Number(r.fat_pecas) || 0), 0);
+  const osResLiq = osResData.map(osFatLiquido);
+  const faturamentoServicos = osResLiq.reduce((s, r) => s + r.servicos, 0);
+  const faturamentoPecas = osResLiq.reduce((s, r) => s + r.pecas, 0);
   // Para o ranking por grupo continuamos usando vw_os_servicos_faturados (precisa de grupo_serv)
   const servicosData = servicos.data ?? [];
 
@@ -129,8 +131,9 @@ export function GerencialTab({ filters }: Props) {
     const dt = String(r.data_faturamento || "").slice(0, 7);
     if (!dt) return;
     if (!fatOsMensal[dt]) fatOsMensal[dt] = { servicos: 0, pecas: 0 };
-    fatOsMensal[dt].servicos += Number(r.fat_servicos) || 0;
-    fatOsMensal[dt].pecas += Number(r.fat_pecas) || 0;
+    const liq = osFatLiquido(r);
+    fatOsMensal[dt].servicos += liq.servicos;
+    fatOsMensal[dt].pecas += liq.pecas;
   });
   const fatOsChartData = Object.entries(fatOsMensal)
     .map(([mes, v]) => {

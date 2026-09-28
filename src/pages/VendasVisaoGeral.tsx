@@ -9,6 +9,7 @@ import { useViewData } from "@/hooks/useComercialData";
 import { formatCurrency, formatCurrencyInt } from "@/data/mockData";
 import { useShell } from "@/components/layout/AppShell";
 import { buildVendedorInfo, resolveVendedorNome } from "@/lib/dim-vendedor";
+import { osFatLiquido } from "@/lib/os-fat";
 
 export default function VendasVisaoGeral() {
   const { filters } = useShell();
@@ -45,9 +46,10 @@ export default function VendasVisaoGeral() {
   const docsRows = docs.data ?? [];
 
   const fatLoja = lojaRows.reduce((s, r) => s + (Number(r.faturamento_doc) || 0), 0);
-  const fatServ = osResRows.reduce((s, r) => s + (Number(r.fat_servicos) || 0), 0);
-  const fatPecasOS = osResRows.reduce((s, r) => s + (Number(r.fat_pecas) || 0), 0);
-  const fatTotal = fatLoja + fatServ + fatPecasOS;
+  const osLiq = osResRows.map(osFatLiquido);
+  const fatServ = osLiq.reduce((s, r) => s + r.servicos, 0);
+  const fatPecasOS = osLiq.reduce((s, r) => s + r.pecas, 0);
+  const fatTotal = fatLoja + osLiq.reduce((s, r) => s + r.total, 0);
 
   const docIds = new Set<string>();
   lojaRows.forEach((r) => docIds.add(`L-${r.id_doc}`));
@@ -85,8 +87,9 @@ export default function VendasVisaoGeral() {
   (lojaHist.data ?? []).forEach((r) => addMonth(String(r.data_faturamento || "").slice(0, 7), "pecas", Number(r.faturamento_doc) || 0));
   (osResHist.data ?? []).forEach((r) => {
     const mk = String(r.data_faturamento || "").slice(0, 7);
-    addMonth(mk, "pecas", Number(r.fat_pecas) || 0);
-    addMonth(mk, "servicos", Number(r.fat_servicos) || 0);
+    const liq = osFatLiquido(r);
+    addMonth(mk, "pecas", liq.pecas);
+    addMonth(mk, "servicos", liq.servicos);
   });
   const monthlyData = Object.entries(monthlyMap)
     .filter(([mk]) => mk)
@@ -123,7 +126,16 @@ export default function VendasVisaoGeral() {
 
       {isLoading ? <KPISkeleton /> : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <MetricCard label="Faturamento" value={formatCurrencyInt(fatTotal)} icon={<DollarSign className="h-4 w-4" />} />
+          <MetricCard
+            label="Faturamento"
+            value={formatCurrencyInt(fatTotal)}
+            icon={<DollarSign className="h-4 w-4" />}
+            sub={[
+              `Loja ${formatCurrencyInt(fatLoja)}`,
+              `Peças OS ${formatCurrencyInt(fatPecasOS)}`,
+              `Serviços ${formatCurrencyInt(fatServ)}`,
+            ]}
+          />
           <MetricCard label="Peças (Loja)" value={formatCurrencyInt(fatLoja)} icon={<Package className="h-4 w-4" />} />
           <MetricCard label="Serviços (OS)" value={formatCurrencyInt(fatServ)} icon={<Wrench className="h-4 w-4" />} />
           <MetricCard label="Ticket Médio" value={formatCurrencyInt(ticket)} icon={<ShoppingCart className="h-4 w-4" />} />
@@ -146,8 +158,8 @@ export default function VendasVisaoGeral() {
                   <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                   <Tooltip formatter={(v: number) => formatCurrency(v)} labelFormatter={(l) => `Dia ${l}`} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="pecas" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Peças" />
-                  <Line type="monotone" dataKey="ordemServico" stroke="hsl(var(--success))" strokeWidth={2} dot={false} name="Ordem de serviço" />
+                  <Line type="monotone" dataKey="pecas" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Peças (Loja)" />
+                  <Line type="monotone" dataKey="ordemServico" stroke="hsl(var(--success))" strokeWidth={2} dot={false} name="OS (peças + serviços)" />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -167,7 +179,7 @@ export default function VendasVisaoGeral() {
                   <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                   <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="pecas" stackId="a" fill="hsl(var(--primary))" name="Peças" />
+                  <Bar dataKey="pecas" stackId="a" fill="hsl(var(--primary))" name="Peças (Loja + OS)" />
                   <Bar dataKey="servicos" stackId="a" fill="hsl(var(--success))" name="Serviços" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>

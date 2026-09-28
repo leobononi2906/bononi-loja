@@ -8,9 +8,11 @@ interface MetricCardProps {
   changeLabel?: string;
   icon?: React.ReactNode;
   hidden?: boolean;
+  /** Linhas pequenas abaixo do valor (ex.: composição do total), uma por item */
+  sub?: string[];
 }
 
-export function MetricCard({ label, value, change, changeLabel, icon, hidden }: MetricCardProps) {
+export function MetricCard({ label, value, change, changeLabel, icon, hidden, sub }: MetricCardProps) {
   if (hidden) return null;
 
   // Ajusta tamanho do texto baseado no comprimento do valor
@@ -34,6 +36,11 @@ export function MetricCard({ label, value, change, changeLabel, icon, hidden }: 
       >
         {value}
       </div>
+      {sub && sub.length > 0 && (
+        <div className="mt-2 text-xs text-muted-foreground leading-snug">
+          {sub.map((linha) => <div key={linha} className="truncate" title={linha}>{linha}</div>)}
+        </div>
+      )}
       {change !== undefined && (
         <div className={`flex items-center gap-1 mt-2 text-sm font-medium ${change >= 0 ? "metric-change-up" : "metric-change-down"}`}>
           {change >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
