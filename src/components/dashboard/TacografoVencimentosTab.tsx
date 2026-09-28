@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Bell, ChevronDown, ChevronRight, PackageOpen, Send } from "lucide-react";
@@ -21,8 +22,18 @@ const ABAS: { value: Aba; label: string }[] = [
   { value: "enviados", label: "Enviados" },
 ];
 
+const ABAS_VALIDAS = ABAS.map((a) => a.value);
+
 export function TacografoVencimentosTab() {
-  const [aba, setAba] = useState<Aba>("pendentes");
+  // Sub-aba na URL: sai versão nova (ou F5) e a pessoa continua na mesma aba.
+  // Esta tela é uma página própria (não outra aba de outra tela), então
+  // `?aba=` não colide com nenhum outro `?aba=` do app.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const abaParam = searchParams.get("aba") as Aba | null;
+  const aba: Aba = abaParam && ABAS_VALIDAS.includes(abaParam) ? abaParam : "pendentes";
+  function setAba(v: Aba) {
+    setSearchParams((p) => { p.set("aba", v); return p; }, { replace: true });
+  }
 
   return (
     <div className="p-4 space-y-4">

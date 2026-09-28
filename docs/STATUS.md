@@ -1,6 +1,6 @@
 # STATUS — Loja Física (bononi-loja)
 
-> Atualizado: 2026-09-24
+> Atualizado: 2026-09-28
 
 ## O que é
 Dashboard de gestão da **loja física**: acompanhamento de vendas, serviços (pátio e tapeçaria), planograma de gôndola e ordens de **tacógrafo** (com upload de documentos).
@@ -94,6 +94,8 @@ React + **TypeScript** + Vite + Tailwind + **shadcn/ui** + react-router-dom. Cli
 - Tacógrafo — dossiê PDF (`taco-pdf.ts`): fotos (`FOTO_TACOGRAFO*`/`DISCO_*`) já vêm comprimidas no upload (`comprimirImagem`, maxDim 1600, JPEG q=0.82), mas PDF anexado (CRLV/comprovante) é copiado **cru** com `pdf.copyPages` — é o maior risco de estourar o teto de 10MB do dossiê final. Por isso o upload de PDF (não-imagem) trava em 8MB (`MAX_PDF_ANEXO_MB` em `TacografoOrdem.tsx`) e o `gerarDossiePdf` checa o tamanho final e lança erro amigável se passar de 10MB — não tenta recomprimir automaticamente (pdf-lib não faz downsampling de página copiada).
 
 ## Dev-log
+- 2026-09-28 — **Versão nova não recarrega mais na cara de quem está usando.** Regra do grupo desde hoje (skill `manter-tela-ao-atualizar`): sair versão nova não pode tirar a pessoa da tela. `src/lib/pwa.ts` dava `location.reload()` na hora do `controllerchange`. Agora a versão nova fica pronta e só entra com a aba oculta ou a pessoa parada há 10 min, e nunca com janela aberta ou campo preenchido em foco. O `controllerchange` da primeira instalação é ignorado. `vite:preloadError` recarrega na mesma URL (pedaço de um deploy que já saiu). `public/sw.js` deixou de guardar resposta `text/html` em `/assets/*`: a Vercel responde 200 com o `index.html` para asset que não existe mais, e isso ficava no cache para sempre. Mesmo conserto publicado antes no `bononi-exped` (`b9f543c`), onde foi testado no build com versão nova simulada.
+  - Aba de Vencimentos de Tacógrafo (`TacografoVencimentosTab.tsx`) em `?aba=`. Testado: aba "Enviados", F5, voltou em "Enviados". Seletor inclui o overlay mobile do AppShell (`.fixed.inset-0.z-30`).
 - 2026-09-24 — **Service worker novo: pega versão nova sozinho, sem F5.** App Vite/React sem
   service worker. `public/sw.js` novo (network-first pra navegação/`index.html`, cache
   permanente pra `/assets/*` hasheado, ignora chamadas a Supabase/outra origem), `src/lib/pwa.ts`
