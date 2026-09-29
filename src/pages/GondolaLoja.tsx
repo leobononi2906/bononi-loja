@@ -271,7 +271,7 @@ export default function GondolaLoja() {
   const refsNaGondola = new Set(gondola.map(i => i.referencia));
 
   const divergentes = gondola.filter(divergencia);
-  const okCount = gondola.filter(i => !divergencia(i) && i.preco_etiqueta != null).length;
+  const okCount = gondola.filter(i => !divergencia(i) && i.preco_etiqueta != null && i.preco_atual != null).length;
 
   // addMutation vive dentro do PainelBusca — aqui só invalidamos o cache
 
@@ -426,6 +426,10 @@ export default function GondolaLoja() {
                       <td className="py-2.5 px-3 text-center">
                         {item.preco_etiqueta == null ? (
                           <span className="text-[10px] text-muted-foreground">Sem etiqueta</span>
+                        ) : item.preco_atual == null ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-100 dark:bg-amber-950/30 px-2 py-0.5 rounded-full">
+                            <AlertTriangle className="h-2.5 w-2.5" /> SEM PREÇO
+                          </span>
                         ) : div ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-red-100 dark:bg-red-950/30 px-2 py-0.5 rounded-full">
                             <AlertTriangle className="h-2.5 w-2.5" /> DIVERGENTE
