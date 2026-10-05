@@ -61,7 +61,8 @@ export function GerencialTab({ filters }: Props) {
   const osFaturadasCount = osFaturadasIds.size;
 
   // ── M.O. Produzida (pátio + tapeçaria) ──
-  const tapProdMO   = useViewData("vw_tap_prod_v3", filters, 5000, { skipTipoSaida: true });
+  // columns explícito: sem ele a fetch-comercial pede id_servico_os, que a v3 não tem (erro 500 e M.O. = 0).
+  const tapProdMO   = useViewData("vw_tap_prod_v3", filters, 5000, { skipTipoSaida: true, columns: "produto_rateado,servico_rateado" });
   const patioFatMO  = useViewData("vw_patio_fat_col_v2", filters, 5000);
   const moProduzida =
     (tapProdMO.data ?? []).reduce((s, r) => s + (Number(r.produto_rateado) || 0) + (Number(r.servico_rateado) || 0), 0) +
