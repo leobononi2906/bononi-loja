@@ -1,6 +1,6 @@
 # STATUS — Loja Física (bononi-loja)
 
-> Atualizado: 2026-10-05
+> Atualizado: 2026-10-20
 
 ## O que é
 Dashboard de gestão da **loja física**: acompanhamento de vendas, serviços (pátio e tapeçaria), planograma de gôndola e ordens de **tacógrafo** (com upload de documentos).
@@ -94,6 +94,18 @@ React + **TypeScript** + Vite + Tailwind + **shadcn/ui** + react-router-dom. Cli
 - Tacógrafo — dossiê PDF (`taco-pdf.ts`): fotos (`FOTO_TACOGRAFO*`/`DISCO_*`) já vêm comprimidas no upload (`comprimirImagem`, maxDim 1600, JPEG q=0.82), mas PDF anexado (CRLV/comprovante) é copiado **cru** com `pdf.copyPages` — é o maior risco de estourar o teto de 10MB do dossiê final. Por isso o upload de PDF (não-imagem) trava em 8MB (`MAX_PDF_ANEXO_MB` em `TacografoOrdem.tsx`) e o `gerarDossiePdf` checa o tamanho final e lança erro amigável se passar de 10MB — não tenta recomprimir automaticamente (pdf-lib não faz downsampling de página copiada).
 
 ## Dev-log
+- 2026-10-20 — **A `fetch-comercial` parou de sumir com o produto repetido na venda/O.S.** (`07dd9c2`, publicada
+  por ele com `--no-verify-jwt`). Download + diff = vazio (no ar = repo).
+  - **O buraco:** a deduplicação de `vw_comercial_itens_faturados` era por `id_doc + id_produto`. A tabela tem
+    `id` e `(tipo_doc, id_item)` únicos, então esse filtro só tirava linha real: o mesmo produto lançado duas
+    vezes, ou venda e O.S. de mesmo número com o mesmo produto. Em 2026 eram 67 linhas, R$ 25.657,05 (O.S.
+    16.832,07; Loja 2.082,26). As views do banco foram corrigidas no mesmo dia
+    (`bononi-dashboard/docs/sql/2026-10-20_itens_dedup_chave_linha.sql`).
+  - Chave nova: `(tipo_doc, id_item)`. Trava: chamada com `columns` sem **nenhuma** coluna da chave não
+    deduplica (antes, todas as linhas viravam uma). As outras views mantêm o comportamento.
+  - **Conferido no ar:** O.S. de 15-16/10 devolvem 136 linhas, iguais às 136 do banco. Doc 7180 com 4 linhas do
+    produto 5427 e doc 7209 com 2 linhas do 2572, que antes saíam com 1 linha cada. Telas que leem: Vendedores e
+    Tapeçaria (sem `columns`). Não conferido na tela logada.
 - 2026-10-05 — **`fetch-comercial` busca a Tapeçaria do mês numa chamada só (~20 s → ~2 s).** O código da função passou a
   morar neste repo (`supabase/functions/fetch-comercial/index.ts`; antes só existia no Supabase). Para a `vw_tap_prod_v3`:
   pedaço de 31 dias e página de 5.000 (era 1 dia e 200), e a lista padrão de colunas sem `id_servico_os`, que a v3 não tem.
