@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 export default {
-  darkMode: ["selector", '[data-theme="dark"]'],
+  darkMode: ["variant", '@media screen { &:where([data-theme="dark"], [data-theme="dark"] *) }'], // dark: só na tela; no papel tudo volta ao claro
   content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
   prefix: "",
   theme: {
