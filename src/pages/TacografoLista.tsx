@@ -77,7 +77,7 @@ export default function TacografoLista() {
             onClick={() => setAba("andamento")}
             className={`px-4 py-2 text-[12.5px] font-semibold transition-colors ${
               aba === "andamento"
-                ? "bg-[hsl(var(--primary))] text-white"
+                ? "bg-[hsl(var(--primary))] text-primary-foreground"
                 : "bg-[hsl(var(--surface2))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
             }`}
           >
@@ -87,7 +87,7 @@ export default function TacografoLista() {
             onClick={() => setAba("concluidas")}
             className={`px-4 py-2 text-[12.5px] font-semibold transition-colors border-l border-[hsl(var(--border))] ${
               aba === "concluidas"
-                ? "bg-[hsl(var(--primary))] text-white"
+                ? "bg-[hsl(var(--primary))] text-primary-foreground"
                 : "bg-[hsl(var(--surface2))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
             }`}
           >
