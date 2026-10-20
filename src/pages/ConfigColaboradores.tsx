@@ -156,7 +156,7 @@ export default function ConfigColaboradores() {
         </div>
         <div className="flex items-center gap-2">
           {savedMsg && (
-            <span className={`text-xs ${savedMsg.includes("Erro") ? "text-destructive" : "text-green-600"}`}>
+            <span className={`text-xs ${savedMsg.includes("Erro") ? "text-destructive" : "text-green-600 dark:text-green-400"}`}>
               {savedMsg}
             </span>
           )}
@@ -199,7 +199,7 @@ export default function ConfigColaboradores() {
                     {pendingChanges[c.id_colaborador] !== undefined && (
                       <span className="text-[10px] text-orange-500 font-medium">alterado</span>
                     )}
-                    <Badge className="bg-blue-100 text-blue-700 text-[10px] px-1.5 cursor-pointer hover:bg-blue-200">
+                    <Badge className="bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-[10px] px-1.5 cursor-pointer hover:bg-blue-200">
                       → TAP
                     </Badge>
                   </div>
@@ -245,7 +245,7 @@ export default function ConfigColaboradores() {
           <h3 className="text-sm font-semibold font-display mb-1 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
             Sem setor cadastrado
-            <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700">{semSetor.length}</Badge>
+            <Badge variant="secondary" className="text-xs bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400">{semSetor.length}</Badge>
           </h3>
           <p className="text-xs text-muted-foreground mb-3">
             Colaboradores com movimento no período mas sem setor definido. Clique para cadastrar.
@@ -266,7 +266,7 @@ export default function ConfigColaboradores() {
                       const next = curr === "PATIO" ? "TAPECARIA" : "PATIO";
                       setPendingChanges(prev => ({ ...prev, [id]: next as "PATIO" | "TAPECARIA" }));
                     }}
-                    className="text-[10px] font-medium px-2 py-0.5 rounded border border-amber-300 bg-white hover:bg-amber-50 text-amber-700 transition-colors"
+                    className="text-[10px] font-medium px-2 py-0.5 rounded border border-amber-300 dark:border-amber-800 bg-card hover:bg-amber-50 dark:hover:bg-amber-950/30 text-amber-700 dark:text-amber-400 transition-colors"
                   >
                     {pendingChanges[c.id_colaborador]
                       ? `→ ${pendingChanges[c.id_colaborador]}`

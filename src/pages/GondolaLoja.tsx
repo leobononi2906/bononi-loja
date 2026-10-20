@@ -148,7 +148,7 @@ function PainelBusca({
     <div className="space-y-2">
       {/* Último adicionado */}
       {ultimoAdicionado && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-950/30 border border-green-200 rounded-lg text-sm text-green-700 font-medium">
+        <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg text-sm text-green-700 dark:text-green-400 font-medium">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span>Adicionado à gôndola — pronto para o próximo</span>
         </div>
@@ -191,7 +191,7 @@ function PainelBusca({
                   <span className="text-xs text-muted-foreground font-mono shrink-0">{prod.referencia}</span>
                   <span className="text-sm font-medium truncate">{prod.nome}</span>
                   {jaAdicionado && (
-                    <span className="text-[10px] text-green-600 font-semibold shrink-0 bg-green-100 px-1.5 py-0.5 rounded">
+                    <span className="text-[10px] text-green-600 dark:text-green-400 font-semibold shrink-0 bg-green-100 dark:bg-green-950/30 px-1.5 py-0.5 rounded">
                       ✓ Na gôndola
                     </span>
                   )}
@@ -325,8 +325,8 @@ export default function GondolaLoja() {
           <div className="metric-value text-[22px] text-destructive">{divergentes.length}</div>
         </div>
         <div className="metric-card border-l-4" style={{ borderLeftColor: "hsl(var(--success))" }}>
-          <div className="metric-label flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-green-600" /> OK</div>
-          <div className="metric-value text-[22px] text-green-600">{okCount}</div>
+          <div className="metric-label flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-green-600 dark:text-green-400" /> OK</div>
+          <div className="metric-value text-[22px] text-green-600 dark:text-green-400">{okCount}</div>
         </div>
       </div>
 
@@ -427,7 +427,7 @@ export default function GondolaLoja() {
                         {item.preco_etiqueta == null ? (
                           <span className="text-[10px] text-muted-foreground">Sem etiqueta</span>
                         ) : item.preco_atual == null ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-100 dark:bg-amber-950/30 px-2 py-0.5 rounded-full">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/30 px-2 py-0.5 rounded-full">
                             <AlertTriangle className="h-2.5 w-2.5" /> SEM PREÇO
                           </span>
                         ) : div ? (
@@ -435,7 +435,7 @@ export default function GondolaLoja() {
                             <AlertTriangle className="h-2.5 w-2.5" /> DIVERGENTE
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-100 dark:bg-green-950/30 px-2 py-0.5 rounded-full">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-950/30 px-2 py-0.5 rounded-full">
                             <CheckCircle2 className="h-2.5 w-2.5" /> OK
                           </span>
                         )}
@@ -448,7 +448,7 @@ export default function GondolaLoja() {
                           </button>
                           {div && (
                             <button title="Confirmar atualização de preço" onClick={() => atualizarMutation.mutate(item)}
-                              className="p-1.5 rounded hover:bg-muted text-amber-600 hover:text-amber-700 transition-colors">
+                              className="p-1.5 rounded hover:bg-muted text-amber-600 dark:text-amber-400 hover:text-amber-700 transition-colors">
                               <RefreshCw className="h-3.5 w-3.5" />
                             </button>
                           )}

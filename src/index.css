@@ -82,7 +82,7 @@
     --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
   }
 
-  .dark {
+  :root[data-theme="dark"] {
     --background: 220 13% 9%;
     --foreground: 214 26% 95%;
     --card: 220 16% 15%;
@@ -99,7 +99,7 @@
     --text-muted: 219 10% 46%;
     --accent: 357 85% 52%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 358 72% 44%;
+    --destructive: 358 72% 52%;
     --destructive-foreground: 0 0% 100%;
     --border: 220 15% 25%;
     --input: 220 15% 25%;
@@ -112,6 +112,23 @@
     --sidebar-accent-foreground: 0 0% 95%;
     --sidebar-border: 220 15% 18%;
     --sidebar-ring: 357 85% 52%;
+    --info-foreground: 0 0% 100%;
+    --success: 151 50% 53%;
+    --success-bg: 146 45% 13%;
+    --warning: 38 71% 58%;
+    --warning-bg: 38 61% 14%;
+    --yellow: 38 71% 58%;
+    --yellow-bg: 38 61% 14%;
+    --info: 211 71% 67%;
+    --blue-mid: 211 71% 67%;
+    --blue-pale: 214 51% 16%;
+    --destructive-bg: 357 47% 15%;
+    --chart-revenue: 358 76% 62%;
+    --chart-services: 211 71% 67%;
+    --chart-margin: 38 71% 58%;
+    --chart-growth-up: 151 50% 53%;
+    --chart-growth-down: 358 100% 71%;
+    color-scheme: dark;
   }
 }
 
@@ -221,3 +238,21 @@
   }
 }
 
+/* Botão de tema do kit (ds/bononi-tema.js) nos tokens HSL deste app.
+   button.bnn-tema-btn ganha em especificidade do <style> que o script injeta. */
+button.bnn-tema-btn {
+  border-color: hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+button.bnn-tema-btn:hover { background: hsl(var(--surface2)); }
+
+@media print {
+  :root[data-theme="dark"] {
+    color-scheme: light;
+    --background: 210 29% 97%; --foreground: 220 16% 15%;
+    --card: 0 0% 100%; --card-foreground: 220 16% 15%;
+    --surface2: 214 26% 95%; --muted: 214 26% 95%; --muted-foreground: 219 10% 46%;
+    --border: 216 19% 90%; --primary: 220 13% 9%; --primary-foreground: 0 0% 100%;
+  }
+}

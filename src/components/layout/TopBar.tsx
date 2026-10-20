@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, RefreshCw, Menu } from "lucide-react";
 import { format, subMonths, addMonths, getDaysInMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
+import { BotaoTema } from "@/components/BotaoTema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { Canal, Empresa, DashboardFilters } from "@/data/mockData";
@@ -49,9 +50,12 @@ export function TopBar({ filters, onChange, title, subtitle, onToggleSidebar }: 
           </div>
         </div>
 
-        <div className="hidden md:flex items-center gap-1.5 text-[10px] text-muted-foreground shrink-0">
-          <RefreshCw className="h-3 w-3" />
-          <span className="font-mono">{format(lastUpdated, "dd/MM HH:mm")}</span>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="hidden md:flex items-center gap-1.5 text-[10px] text-muted-foreground shrink-0">
+            <RefreshCw className="h-3 w-3" />
+            <span className="font-mono">{format(lastUpdated, "dd/MM HH:mm")}</span>
+          </div>
+          <BotaoTema />
         </div>
       </div>
 

@@ -553,7 +553,7 @@ export default function TacografoOrdem() {
               </div>
             </Campo>
             {buscaAberta && buscaCliente.trim().length >= 3 && (
-              <div className="absolute z-20 mt-1 w-full bg-white border border-[hsl(var(--border))] rounded-lg shadow-lg max-h-64 overflow-y-auto">
+              <div className="absolute z-20 mt-1 w-full bg-card border border-[hsl(var(--border))] rounded-lg shadow-lg max-h-64 overflow-y-auto">
                 <div className="flex items-center justify-between px-3 py-2 border-b border-[hsl(var(--border))]">
                   <span className="text-[11px] font-semibold uppercase text-[hsl(var(--text-muted))]">
                     {buscandoCliente ? "Buscando..." : `${(clientesERP ?? []).length} resultado(s)`}
