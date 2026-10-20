@@ -84,7 +84,9 @@ const TODOS_TIPO_SAIDA = ["Loja", "LOJA", "loja", "O.S.", "O.S", "OS"];
 const VIEW_DEDUP_KEYS: Record<string, string[]> = {
   vw_comercial_docs_faturados: ["id_doc", "tipo_doc"],
   vw_comercial_diario: ["data_ref", "tipo_doc", "tipo_saida", "id_empresa"],
-  vw_comercial_itens_faturados: ["id_doc", "id_produto"],
+  // a linha do documento (20/10/2026): por id_doc+id_produto sumia o produto repetido na venda/O.S.
+  // e a venda e a O.S. de mesmo número com o mesmo produto
+  vw_comercial_itens_faturados: ["tipo_doc", "id_item"],
   vw_os_servicos_faturados: ["id_servico_os"],
   vw_os_pecas_faturadas: ["id_item"],
   vw_os_servico_x_pecas_faturado: ["id_servico_os", "id_os"],
@@ -95,12 +97,15 @@ const VIEW_DEDUP_KEYS: Record<string, string[]> = {
 
 function deduplicateRows(rows: Record<string, unknown>[], keyColumns: string[]): Record<string, unknown>[] {
   const seen = new Map<string, Record<string, unknown>>();
+  const semChave: Record<string, unknown>[] = [];
   for (const row of rows) {
+    // `columns` sem nenhuma coluna da chave: não deduplica (senão todas as linhas viram uma só)
+    if (keyColumns.every((c) => row[c] === undefined)) { semChave.push(row); continue; }
     const key = keyColumns.map((c) => String(row[c] ?? "")).join("|");
     const existing = seen.get(key);
     if (!existing || (Number(row.id) || 0) < (Number(existing.id) || 0)) seen.set(key, row);
   }
-  return Array.from(seen.values());
+  return [...seen.values(), ...semChave];
 }
 
 const PAGE_SIZE = 1000;
