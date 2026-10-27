@@ -152,9 +152,17 @@ export function ComercialVendedoresTab({ filters }: Props) {
       if (!id || id === "0" || id === "null") return;
       if (vendedorInfo.ids.size && !vendedorInfo.ids.has(id)) return;
       const entry = ensure(id, sellerName(row, vendedorInfo.names));
+      // A OS tem peças e serviços; antes o valor inteiro ia para "serviços" (Henrique saía com
+      // R$ 0 de peças). vl_peca/vl_servico são antes do desconto de fechamento e vl_total é o
+      // faturado: o desconto é rateado na proporção de cada um (mesma regra de os-fat.ts).
       const value = toMoney(row.vl_total || row.faturamento_doc);
+      const pecaBruto = toMoney(row.vl_peca);
+      const servBruto = toMoney(row.vl_servico);
+      const bruto = pecaBruto + servBruto;
+      const pecas = bruto > 0 ? Math.round((value * pecaBruto) / bruto * 100) / 100 : 0;
       entry.faturamento += value;
-      entry.servicos += value;
+      entry.pecas += pecas;
+      entry.servicos += Math.round((value - pecas) * 100) / 100 || 0; // `|| 0` tira o -0 que vira "-R$ 0,00"
       entry.docs.add(`O-${row.id_os || row.id_doc}`);
       const cid = clientId(row);
       if (cid) entry.clientes.add(cid);

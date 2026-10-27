@@ -81,6 +81,27 @@ const CANAL_TIPO_SAIDA: Record<string, string[]> = {
 
 const TODOS_TIPO_SAIDA = ["Loja", "LOJA", "loja", "O.S.", "O.S", "OS"];
 
+// Paginação por `range` sem ORDER BY não é estável: a 2ª página repetia linhas da 1ª e deixava
+// outras de fora (out/2026: a vw_os_base_fat_corrigido tinha 1.878 OS e chegavam 1.036 ao app,
+// 27/10/2026). Ordena por `id` nas views que têm essa coluna; as outras não a têm.
+const VIEW_ORDER_BY_ID = new Set([
+  "geral_itens_faturados",
+  "vw_comercial_docs_faturados",
+  "vw_comercial_itens_faturados",
+  "vw_comercial_loja",
+  "vw_comercial_os",
+  "vw_dim_cliente",
+  "vw_dim_colaborador",
+  "vw_dim_vendedor",
+  "vw_os_base",
+  "vw_os_base_fat_corrigido",
+  "vw_os_pecas_faturadas",
+  "vw_os_servico_x_pecas_faturado",
+  "vw_os_servicos_faturados",
+  "vw_patio_apontamentos",
+  "vw_tapecaria_apontamentos",
+]);
+
 const VIEW_DEDUP_KEYS: Record<string, string[]> = {
   vw_comercial_docs_faturados: ["id_doc", "tipo_doc"],
   vw_comercial_diario: ["data_ref", "tipo_doc", "tipo_saida", "id_empresa"],
@@ -178,6 +199,7 @@ Deno.serve(async (req) => {
 
     function buildQuery(from: number, to: number, overrideStartDate?: string, overrideEndDate?: string) {
       let query = external.from(view).select(selectColumns).range(from, to);
+      if (VIEW_ORDER_BY_ID.has(view)) query = query.order("id", { ascending: true });
       if (!skipTipoSaida && VIEW_HAS_TIPO_SAIDA.has(view)) {
         if (canal && canal !== "TODOS") {
           const vals = CANAL_TIPO_SAIDA[canal];
