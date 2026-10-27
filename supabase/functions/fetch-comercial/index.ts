@@ -6,6 +6,27 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ── Quem pode chamar (27/10/2026) ──────────────────────────────────────────────────────────
+// Antes: qualquer um com a chave anon (que está no bundle) lia vendas, OS e pátio do grupo por
+// aqui — Verify JWT não protege, a anon é um JWT válido. Agora passa: chave de serviço (outra
+// Edge/cron) ou usuário logado com módulo `loja` ou `rh` (a Análise SGA do RH lê vw_tap_prod_v3)
+// em app_metadata (o usuário não edita), ou admin global. Conta de cliente da Vitrine não passa.
+const MODULOS_PERMITIDOS = ["loja", "rh"];
+async function quemChama(req: Request, modulos: string[]): Promise<{ ok: boolean; status: number; erro?: string }> {
+  const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) return { ok: false, status: 401, erro: "faça login" };
+  if (token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) return { ok: true, status: 200 };
+  const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/auth/v1/user`, {
+    headers: { apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? "", Authorization: `Bearer ${token}` },
+  }).catch(() => null);
+  if (!r || !r.ok) return { ok: false, status: 401, erro: "faça login" };
+  const m = ((await r.json().catch(() => null)) as { app_metadata?: Record<string, unknown> } | null)?.app_metadata ?? {};
+  const lista = (v: unknown) => (Array.isArray(v) ? (v as string[]) : []);
+  const tem = [...lista(m.modulos), ...lista(m.admin_modulos)];
+  if (m.admin === true || modulos.some((x) => tem.includes(x))) return { ok: true, status: 200 };
+  return { ok: false, status: 403, erro: "sem acesso a este módulo" };
+}
+
 const VIEW_DATE_COLUMNS: Record<string, string | null> = {
   vw_comercial_itens_faturados: "data_faturamento",
   vw_comercial_docs_faturados: "data_faturamento",
@@ -167,6 +188,11 @@ function splitDateRangeIntoChunks(start: string, end: string, chunkDays: number)
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const acesso = await quemChama(req, MODULOS_PERMITIDOS);
+  if (!acesso.ok) {
+    return new Response(JSON.stringify({ error: acesso.erro }), { status: acesso.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
 
   try {
     const externalUrl = Deno.env.get("EXTERNAL_SUPABASE_URL")!;
