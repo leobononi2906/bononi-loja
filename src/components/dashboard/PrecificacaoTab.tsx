@@ -5,16 +5,18 @@ import { Calculator, ChevronDown, ChevronRight, CheckCircle2, PackageOpen } from
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TableSkeleton } from "./LoadingSkeleton";
+import { useAuth } from "@/lib/auth";
 import { ErrorAlert } from "./ErrorAlert";
 import {
-  db, distLog, getUsuarioNome, setUsuarioNome, fmtDataAbrev, fmtHoras, limparObservacao, EMPRESA_MLB_PR,
+  db, distLog, fmtDataAbrev, fmtHoras, limparObservacao, EMPRESA_MLB_PR,
   type DistPrecificacaoRow, type ApontamentoOS,
 } from "@/lib/dist";
 
 export function PrecificacaoTab() {
   const qc = useQueryClient();
   const [expandido, setExpandido] = useState<number | null>(null);
-  const [usuario, setUsuario] = useState(getUsuarioNome());
+  const { usuario: nomeLogin } = useAuth();
+  const [usuario, setUsuario] = useState(nomeLogin);
   const [validando, setValidando] = useState<number | null>(null);
 
   const { data: servicos, isLoading, error } = useQuery({
@@ -34,7 +36,6 @@ export function PrecificacaoTab() {
       toast.error("Informe seu nome antes de validar.");
       return;
     }
-    setUsuarioNome(nome);
     setValidando(row.id_servico);
     const agora = new Date().toISOString();
     let error;

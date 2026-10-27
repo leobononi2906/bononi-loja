@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDaysInMonth } from "date-fns";
 import type { DashboardFilters } from "@/data/mockData";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface FetchError {
   error: string;
@@ -96,9 +97,14 @@ async function fetchView(
 
   const url = `https://${projectId}.supabase.co/functions/v1/fetch-comercial?${params}`;
 
+  // Token do usuário logado na hora da chamada (a sessão renova sozinha); apikey segue junto.
+  const { data: sessaoData } = await supabase.auth.getSession();
+  const token = sessaoData.session?.access_token;
+
   const response = await fetch(url, {
     headers: {
       apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZpc2h4d2R4cWl5Z2J4bXRwZm95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0Njg2MjIsImV4cCI6MjA4ODA0NDYyMn0.J647m3ieDHahNQYBWMRESl0aPFXsT_zt_7ZcDvyB-SA",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
 

@@ -5,15 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 // Tabelas/views dist_*/vw_dist_* não estão no types.ts gerado — cliente sem tipagem para este módulo
 export const db = supabase as any;
 
-// Nome do usuário atual (mesmo padrão já usado em Vendas sem Faturamento) —
-// reaproveitado aqui para distribuido_por/validado_por, sem precisar de login.
-export const USUARIO_KEY = "loja_usuario_nome";
-export function getUsuarioNome(): string {
-  return localStorage.getItem(USUARIO_KEY) || "";
-}
-export function setUsuarioNome(nome: string) {
-  localStorage.setItem(USUARIO_KEY, nome);
-}
+// Quem distribuiu/validou/registrou vem do usuário logado (useAuth().usuario, login pelo Hub
+// desde 27/10/2026) — antes era um nome digitado e guardado em localStorage["loja_usuario_nome"].
 
 // Piloto do módulo é só MLB PR — Lista de Distribuição e Precificação mostram
 // só OS dessa empresa (pedido do Leo, 26/08). id_empresa=2 em vw_dist_servicos/

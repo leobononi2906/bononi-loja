@@ -16,9 +16,10 @@ import {
 import { TableSkeleton } from "./LoadingSkeleton";
 import { ErrorAlert } from "./ErrorAlert";
 import { SortableHeader } from "./SortableHeader";
+import { useAuth } from "@/lib/auth";
 import { useSortable } from "@/hooks/useSortable";
 import {
-  db, distLog, getUsuarioNome, setUsuarioNome, fmtDataAbrev, limparObservacao,
+  db, distLog, fmtDataAbrev, limparObservacao,
   STATUS_INFO, STATUS_ATIVOS, EMPRESA_MLB_PR, calcularPresenca, presencaDe,
   type DistArea, type DistServicoRow, type ColaboradorDim, type StatusDistServico, type DistColabAreaRow,
   type ApontamentoPresenca,
@@ -609,7 +610,8 @@ function DistribuirDialog({
   const [colabsInicializado, setColabsInicializado] = useState(!editando || row.id_dist == null);
   const [buscaColab, setBuscaColab] = useState("");
   const [observacao, setObservacao] = useState(editando ? row.obs_distribuicao ?? "" : "");
-  const [usuario, setUsuario] = useState(getUsuarioNome());
+  const { usuario: nomeLogin } = useAuth();
+  const [usuario, setUsuario] = useState(nomeLogin);
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
@@ -632,7 +634,6 @@ function DistribuirDialog({
 
   async function salvar() {
     setSalvando(true);
-    setUsuarioNome(usuario.trim());
 
     const agora = new Date().toISOString();
     const temDestino = !!idArea || colabsSel.size > 0;

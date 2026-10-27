@@ -3,12 +3,13 @@ import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Users, Wrench, ParkingCircle, Scissors, Settings2, Tag, Gauge, AlertTriangle, X,
-  ClipboardList, LayoutGrid, Calculator, MapPin, Bell, type LucideIcon,
+  ClipboardList, LayoutGrid, Calculator, MapPin, Bell, LogOut, type LucideIcon,
 } from "lucide-react";
 import logoBononiReverse from "@/assets/logo-bononi-reverse.png";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { EMPRESA_MLB_PR } from "@/lib/dist";
+import { useAuth } from "@/lib/auth";
 
 // Views vw_dist_servicos/vw_taco_venc_pendentes não estão no types.ts gerado —
 // mesmo padrão de src/lib/dist.ts e src/lib/taco.ts (cliente sem tipagem aqui).
@@ -75,6 +76,7 @@ interface Props {
 
 export function AppSidebar({ onClose }: Props) {
   const location = useLocation();
+  const { usuario, sair } = useAuth();
   const [selos, setSelos] = useState<Partial<Record<SeloKey, number>>>({});
 
   // Contagem leve (head + count=exact, sem baixar linha nenhuma). Recalcula ao
@@ -156,8 +158,18 @@ export function AppSidebar({ onClose }: Props) {
         ))}
       </nav>
 
-      <div className="px-4 py-3 border-t text-[10px]" style={{ borderColor: "hsl(var(--sidebar-border))", color: "rgba(255,255,255,0.4)" }}>
-        Bononi Acessórios · Loja v1.0
+      <div className="px-4 py-3 border-t flex items-center gap-2" style={{ borderColor: "hsl(var(--sidebar-border))" }}>
+        <span className="min-w-0 flex-1 truncate text-xs" style={{ color: "rgba(255,255,255,0.7)" }} title={usuario}>
+          {usuario}
+        </span>
+        <button
+          type="button"
+          onClick={sair}
+          className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-md px-3 text-xs font-semibold text-white/80 hover:bg-white/10 hover:text-white"
+        >
+          <LogOut className="h-4 w-4" />
+          Sair
+        </button>
       </div>
     </aside>
   );

@@ -23,8 +23,14 @@ async function fetchViaEdge(view: string, startDate: string, endDate: string, co
     limit: "9999", start_date: startDate, end_date: endDate, columns,
     skip_tipo_saida: "1",
   });
+  // Token do usuário logado na hora da chamada; apikey segue junto.
+  const { data: sessaoData } = await supabase.auth.getSession();
+  const token = sessaoData.session?.access_token;
   const res = await fetch(`${SUPABASE_URL}/functions/v1/fetch-comercial?${params}`, {
-    headers: { apikey: SUPABASE_KEY },
+    headers: {
+      apikey: SUPABASE_KEY,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
   });
   if (!res.ok) return [];
   const json = await res.json();

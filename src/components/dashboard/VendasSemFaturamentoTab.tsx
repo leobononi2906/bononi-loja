@@ -12,6 +12,7 @@ import { formatCurrency } from "@/data/mockData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/lib/auth";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -77,12 +78,6 @@ const QUICK_FILTERS: { value: QuickFilter; label: string }[] = [
   { value: "custom", label: "Personalizado" },
 ];
 
-const USUARIO_KEY = "loja_usuario_nome";
-
-function getUsuarioNome(): string {
-  return localStorage.getItem(USUARIO_KEY) || "";
-}
-
 function semanaAnteriorRange() {
   const base = subWeeks(new Date(), 1);
   return {
@@ -115,7 +110,8 @@ export function VendasSemFaturamentoTab() {
   const [customFim, setCustomFim] = useState("");
   const [vendedorFiltro, setVendedorFiltro] = useState("todos");
   const [drawerVenda, setDrawerVenda] = useState<VendaSemFat | null>(null);
-  const [usuario, setUsuario] = useState(getUsuarioNome());
+  const { usuario: nomeLogin } = useAuth();
+  const [usuario, setUsuario] = useState(nomeLogin);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["vendas_sem_faturamento"],
@@ -409,10 +405,7 @@ export function VendasSemFaturamentoTab() {
         <FollowupDialog
           venda={drawerVenda}
           usuario={usuario}
-          onUsuarioChange={(nome) => {
-            setUsuario(nome);
-            localStorage.setItem(USUARIO_KEY, nome);
-          }}
+          onUsuarioChange={setUsuario}
           onClose={() => setDrawerVenda(null)}
           onChanged={() => qc.invalidateQueries({ queryKey: ["vendas_sem_faturamento"] })}
         />
