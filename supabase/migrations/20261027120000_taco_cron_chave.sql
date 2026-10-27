@@ -1,3 +1,4 @@
+-- aplicada em produção em 2026-10-27 (pós: cron manda x-cron-chave, ativo; confere aceita a certa; anon não executa)
 -- ============================================================
 -- 20261027120000 — chave própria para o cron do aviso de vencimento de tacógrafo
 --
