@@ -64,6 +64,24 @@ export function AuthProvider({ children, onSair }: { children: ReactNode; onSair
     });
   }, [session, temAcesso]);
 
+  // Sessão + módulo confirmados: liga o geral-central (botão Ajuda com a assistente de IA,
+  // pedido de melhoria, sino, avisos, senha). Uma vez por página. Ver public/ds/geral-central.js
+  // (cópia verbatim de bononi-hub/ds/), carregado pelo index.html.
+  const centralIniciado = useRef(false);
+  useEffect(() => {
+    const GC = (window as unknown as { GeralCentral?: { iniciar: (o: unknown) => void } }).GeralCentral;
+    if (!session || !temAcesso || centralIniciado.current || !GC) return;
+    centralIniciado.current = true;
+    const cli = supabase as unknown as { supabaseUrl: string; supabaseKey: string };
+    GC.iniciar({
+      appId: MODULO,
+      url: cli.supabaseUrl,
+      key: cli.supabaseKey,
+      sb: supabase,
+      usuario: { email: session.user.email || "", nome: (session.user.user_metadata?.nome as string | undefined) || "" },
+    });
+  }, [session, temAcesso]);
+
   const sair = async () => {
     await supabase.auth.signOut();
     setSession(null);
