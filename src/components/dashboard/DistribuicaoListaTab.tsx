@@ -20,7 +20,7 @@ import { useAuth } from "@/lib/auth";
 import { useSortable } from "@/hooks/useSortable";
 import {
   db, distLog, fmtDataAbrev, limparObservacao,
-  STATUS_INFO, STATUS_ATIVOS, EMPRESA_MLB_PR, calcularPresenca, presencaDe,
+  STATUS_INFO, STATUS_ATIVOS, EMPRESA_MLB_PR, calcularPresenca, presencaDe, apontamentoAberto,
   type DistArea, type DistServicoRow, type ColaboradorDim, type StatusDistServico, type DistColabAreaRow,
   type ApontamentoPresenca,
 } from "@/lib/dist";
@@ -170,7 +170,7 @@ export function DistribuicaoListaTab() {
       if (p !== "pausado") set.add(c.id_colaborador);
     });
     (apontamentosColab ?? []).forEach((a) => {
-      if (!a.hora_termino) set.add(a.id_colaborador);
+      if (apontamentoAberto(a.hora_termino)) set.add(a.id_colaborador);
     });
     return set;
   }, [colabsOcupadosManual, apontamentosColab, servicosList, presencaMap]);

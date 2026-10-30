@@ -209,13 +209,21 @@ export interface ApontamentoPresenca {
   hora_termino: string | null;
 }
 
+// Apontamento ainda aberto. O ERP NUNCA deixa o término vazio: o trigger
+// TBL_APONTAMENTO_FUNC_BI grava '00:00' quando vem nulo (achado 30/10/2026 —
+// antes só testávamos vazio e ninguém aparecia "trabalhando").
+export function apontamentoAberto(horaTermino: string | null | undefined): boolean {
+  const h = (horaTermino ?? "").trim();
+  return h === "" || h.startsWith("00:00");
+}
+
 // "trabalhando" sempre vence (sessão aberta), mesmo se aparecer depois de um
 // apontamento fechado do mesmo colaborador/serviço na lista.
 export function calcularPresenca(apontamentos: ApontamentoPresenca[]): Map<string, PresencaColaborador> {
   const mapa = new Map<string, PresencaColaborador>();
   apontamentos.forEach((a) => {
     const chave = `${a.id_servico}|${a.id_colaborador}`;
-    if (!a.hora_termino) mapa.set(chave, "trabalhando");
+    if (apontamentoAberto(a.hora_termino)) mapa.set(chave, "trabalhando");
     else if (mapa.get(chave) !== "trabalhando") mapa.set(chave, "pausado");
   });
   return mapa;
