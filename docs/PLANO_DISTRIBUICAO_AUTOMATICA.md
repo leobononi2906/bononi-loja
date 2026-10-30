@@ -1,276 +1,192 @@
-# Plano — Distribuição automática de serviços (TV + tela do gestor)
+# Plano — Distribuição automática de serviços (TV + gestor + consulta por placa)
 
-> Pedido do Leo em 30/10/2026. Este documento é o **ponto de partida**: mostra o que já existe, o que
-> falta e a ordem de construção. Atualizar a seção "Decisões" conforme o Leo for respondendo.
-> Módulo: Loja Física › Gestão de Serviços. Piloto **só MLB PR** (`id_empresa=2`), igual ao resto do módulo.
+> **Para quem vai tocar (Gustavo):** este é o documento único do projeto. Começa pelo resumo (§1),
+> depois o que já está pronto (§4) e as fases que faltam (§6). As regras de dado (§3) e as
+> armadilhas (§8) são o que mais quebra se ignorar.
+> Módulo: **Loja Física › Gestão de Serviços**. Piloto **só MLB PR** (`id_empresa = 2`).
+> Pedido do Leo em 30/10/2026. Última revisão: 30/10/2026.
 
-## 1. O que o Leo quer (em uma frase cada)
+## 1. Resumo em 6 linhas
 
-1. **TV na oficina:** mostra cada colaborador — em qual O.S./serviço está, ou se está livre (e há quanto
-   tempo) — e quais são os próximos serviços dele.
-2. **Tela do gestor:** mexer na sequência; num serviço, escolher quem pode fazer: uma **área inteira** ou
-   **colaboradores específicos**.
-3. **Sequência automática:** o gestor intervém o mínimo possível.
-4. **As duas telas respondem uma pergunta:** "como está cada área, o que vem depois e se dá para pegar
-   mais serviço hoje".
+1. A oficina passa a ter **uma fila automática por área**, na **ordem de chegada** da O.S.
+2. Uma **TV** mostra, por área, os **próximos serviços**, **quem está disponível** e uma **faixa
+   colorida** que diz ao vendedor se ainda cabe serviço hoje.
+3. O **gestor** só intervém nas exceções: subir um serviço, escolher quem faz, pausar.
+4. Pelo **celular**, qualquer um consulta a **placa** e vê o andamento do veículo.
+5. O dado vem do ERP (Firebird) **a cada 3 min**, só das **O.S. abertas**. **Nada é gravado no ERP**.
+6. As telas novas **substituem** a "Lista de Distribuição" e o "Painel do Gestor" atuais (§5).
 
-## 2. Como funciona hoje no ERP legado (Firebird) — e por que isso importa
+## 2. Como o ERP funciona hoje (base de tudo)
 
 - O vendedor abre a O.S. e lança **uma linha de serviço por tarefa** (`TBL_SERVICO`).
-  - O tipo vem do cadastro (`TBL_SERVICOP`, ex.: "AUTO ELETRICA").
-  - O que fazer vai na coluna "Qtd. Desc." (`QTD_DESC`, ex.: "TROCAR FAROL").
-  - Uma O.S. pode ter SV1, SV2… do mesmo tipo.
-- **Colaborador "marcado" no serviço:** fica uma linha em `TBL_FUNCSERV_OS` (serviço × colaborador),
-  mesmo sem nenhuma hora apontada. É o "SV2, eu também vou fazer".
-- **Apontamento:** fica em `TBL_APONTAMENTO_FUNC`, pendurado no `TBL_FUNCSERV_OS`, com data, hora de
-  início e hora de término.
-  - Apontamento sem término = **trabalhando agora**.
-- **Fim do serviço:** o colaborador marca OK (`TBL_SERVICO.OK = 'X'`). Ele é obrigado a dar OK em todos,
-  inclusive no SV2 que nunca teve apontamento.
-- **Nosso app nunca escreve no Firebird.** A regra é absoluta: a produção é só leitura. Por isso:
+  - O tipo vem do cadastro (`TBL_SERVICOP`, ex.: AUTO ELETRICA).
+  - O que fazer vai em "Qtd. Desc." (`QTD_DESC`, ex.: "TROCAR FAROL").
+  - Exemplo: SV1 AUTO ELETRICA "trocar farol" e SV2 AUTO ELETRICA "troca lâmpada seta".
+- O colaborador **se aponta** no SV1 (`TBL_APONTAMENTO_FUNC`: data, início, término) e **se marca**
+  no SV2 (`TBL_FUNCSERV_OS`, colaborador × serviço). O SV2 muitas vezes fica sem nenhuma hora apontada.
+- No fim, ele é **obrigado a dar OK em todos** (`TBL_SERVICO.OK = 'X'`).
+- **Nosso app nunca escreve no Firebird.** A regra é absoluta: produção é só leitura, nem view se cria. Por isso:
   - o colaborador continua se lançando e se marcando **no ERP**, como hoje;
-  - a nossa "distribuição" é **orientação** — o que o gestor e a TV mostram;
-  - a verdade sobre quem está fazendo o quê vem do apontamento lido do ERP.
-  - Se alguém pegar outro serviço que não o sugerido, o motor simplesmente recalcula.
-  - Não dá para travar ninguém, e nem queremos.
+  - a distribuição é **orientação**; não trava ninguém;
+  - se alguém pegar outro serviço, o motor simplesmente recalcula.
 
-## 3. O que já existe (construído em 25-26/08/2026)
+## 3. Regras de dado (o porquê de cada uma)
 
-Tudo está em `vishxwdxqiygbxmtpfoy`. Os detalhes estão no `STATUS.md` e na memória
-`gestao-servicos-distribuicao-precificacao`.
+| Regra | Por quê |
+|---|---|
+| **Apontamento aberto = término vazio OU `'00:00'`** | O trigger `TBL_APONTAMENTO_FUNC_BI` grava `00:00` quando o término vem vazio. Testar só "vazio" nunca acha ninguém trabalhando (era o bug do app antigo). Helper: `apontamentoAberto()` em `src/lib/dist.ts`. |
+| **Copia só O.S. com `status = 'A'`** (não cancelada) | Decisão do Leo (30/10). No ERP só existem `A` (aberta) e `F` (fechada). O.S. fechada some da TV sozinha, porque cada cópia substitui as tabelas inteiras. |
+| **A cópia relê tudo a cada ciclo** (sem incremental) | Não existe data/hora de alteração utilizável: `TBL_OS.DATA_ATUALIZACAO` é só DATE; serviço, marcação e apontamento não têm data; `TBL_LOG` não registra OK, marcação nem apontamento; fechar apontamento é UPDATE. São só ~430 serviços abertos, então a leitura leva ~1 s. |
+| **Encoding `WIN1252`** na conexão da cópia rápida | Com o padrão (UTF8), o acento do ERP vira "SERVI�OS". |
+| **Colaborador com vários apontamentos abertos** | É comum. O "atual" é o aberto mais recente; os de outras O.S. antigas são "esquecido aberto" (aviso para o gestor). |
+| **"Antigo parado" sai da fila** | O.S. com mais de 7 dias (`dist_config.dias_antigo`) e nenhum apontamento nesse prazo vai para a lista `antigos`, para o gestor resolver. Eram 36 serviços em 30/10: O.S. de fev–out nunca concluídas no ERP, que entupiam a fila. |
+| **Tempo estimado de cada serviço** | Ajuste manual do gestor (`dist_tempo_servicop`); senão, a mediana dos últimos 180 dias do tipo (mínimo 5 casos, < 40 h); senão, 1 h. Serviço já começado conta só o que falta (mínimo 15 min). |
+| **Capacidade do dia** | Colaboradores da área × horas que restam do expediente, menos o que falta dos serviços com apontamento aberto hoje. Expediente: **08:00–12:00 e 13:12–18:00** (8,8 h/dia, em `dist_config.expediente`). |
+| **Área do serviço** | A escolha do gestor (`dist_servico`), senão o mapa tipo → área (`dist_area_servicop`). |
+| **Disponível** | Colaborador ligado à área (`dist_colaborador_area`) **sem** apontamento aberto hoje. Quem não estiver ligado a nenhuma área **não aparece**. |
 
-| Peça | O que é | Estado |
+## 4. O que já está pronto (30/10/2026)
+
+### 4.1 Servidor — cópia rápida (SRV-DASHBOARD)
+
+- **Servidor:** SRV-DASHBOARD, agora em **`192.168.0.11`** (era `.8`; mudou de IP sem aviso, mas é a mesma máquina, conferida pela chave SSH). Acesso só por SSH. Doc: `bononi-replicador/docs/SERVIDOR_PRODUCAO.md`.
+- **Arquivos em `C:\bononi-replicador`:**
+  - `land-dist-aovivo.js` (o programa);
+  - `alvos\dist_aovivo.js` (as 3 consultas, só leitura);
+  - `run-dist-aovivo.bat` (o que a tarefa chama; grava log em `logs\dist-aovivo.log`).
+  - Backup da versão anterior do alvo: `alvos\dist_aovivo.js.bak-20261030`.
+- **Teste no servidor** em 30/10, já com "só abertas": **426 serviços** de 198 O.S., 232 marcações, 246 apontamentos, **1,1 s**.
+- **Proteções:**
+  - usa tabelas e programa próprios, sem a staging compartilhada do `refresh-all` (regra "1 fonte por tabela");
+  - se ler 0 serviço, aborta sem apagar nada.
+- ⏳ **Falta criar a tarefa agendada** `BononiDistAoVivo3min`. A permissão do Claude Code bloqueia; quem tem acesso à máquina do servidor roda, no **Prompt de Comando como Administrador**:
+  ```
+  schtasks /create /tn BononiDistAoVivo3min /tr "cmd.exe /c C:\bononi-replicador\run-dist-aovivo.bat" /sc weekly /d MON,TUE,WED,THU,FRI,SAT /st 07:00 /ri 3 /du 12:00 /k /ru SYSTEM /rl HIGHEST /f
+  schtasks /run /tn BononiDistAoVivo3min
+  ```
+  Ela roda a cada 3 min, das 07h às 19h, de segunda a sábado. Para conferir, `dist_aovivo_estado.atualizado_em` deve andar a cada 3 min.
+
+### 4.2 Banco (Supabase `vishxwdxqiygbxmtpfoy`)
+
+Estado final em `supabase/migrations/20261030180000_dist_painel.sql`.
+
+| Objeto | O que é |
+|---|---|
+| `dist_aovivo_servico` | Serviços das O.S. abertas (todas as empresas). |
+| `dist_aovivo_marcacao` | `TBL_FUNCSERV_OS` **com ou sem** apontamento (o "SV2 marcado"). |
+| `dist_aovivo_apontamento` | Apontamentos, com a coluna `aberto`. |
+| `dist_aovivo_estado` | Uma linha: hora da última cópia e contagens. |
+| `dist_aovivo_carregar(...)` | Única porta de gravação (só service_role). Apaga e regrava as 3 tabelas numa transação só, então a TV nunca vê cópia pela metade. |
+| `dist_config` | `expediente`, `dias_antigo`. |
+| `dist_tempo_servicop` | Tempo padrão por tipo, ajustado pelo gestor. |
+| `dist_horas_restantes_hoje()` | Horas do expediente que ainda faltam hoje. |
+| **`dist_painel(p_empresa)`** | **O motor.** Devolve, por área: fila (ordem de chegada), disponíveis, `fila_horas`, `capacidade_horas`, mais as listas `sem_area` e `antigos`. A TV e o gestor usam a mesma função, portanto veem a mesma resposta. |
+| `dist_areas`, `dist_area_servicop`, `dist_colaborador_area`, `dist_servico`, `dist_servico_colaborador` | Já existiam (25/08): áreas, tipo → área, colaborador → área, decisões do gestor. |
+
+Leitura liberada só para usuário logado (RLS).
+
+### 4.3 App — TV (`/tv`)
+
+- `src/pages/TvServicos.tsx`. Rota fora do menu, mas exige login no Hub com o módulo `loja`.
+- Tela cheia, escura, sem clique. Atualiza a cada 1 min. A letra acompanha a altura da TV (testado em 1080p e 768p).
+- **Por área:**
+  - nome e quantos na fila;
+  - **faixa do vendedor** (`lotacaoArea()` em `src/lib/dist.ts`):
+    - 🟢 "Cabe +Xh hoje";
+    - 🟡 "Só serviço rápido hoje";
+    - 🔴 "Cheio hoje — só amanhã" / "Fila de X dias";
+  - **Disponíveis** (primeiro nome · há quanto tempo livre);
+  - **3 próximos veículos**, agrupados por O.S. (a frota chega com 5–10 serviços na mesma O.S.), com prisma, serviços, veículo e tempo estimado.
+- Selo vermelho "Sem atualização há X" se a cópia passar de 15 min parada.
+- **Login da TV:** criar no Hub o usuário "TV Oficina" com o módulo `loja`; abrir `https://bononiloja.vercel.app/tv` uma vez e entrar (a sessão fica salva). Limite: esse usuário enxerga o app da loja inteiro; restringir exige um módulo novo no Hub (depois).
+
+## 5. O que substitui o quê no app
+
+Menu atual de Gestão de Serviços → como fica:
+
+| Hoje | Fonte de dado hoje | Fica como |
 |---|---|---|
-| `vw_fb_os_servico` | Cópia das linhas de serviço (O.S. abertas + 6 meses), com OK, apontado e horas | ✅ funciona, mas **chega 2x por dia** |
-| `vw_fb_os_apontamento` | Apontamentos por colaborador (início/término) | ✅ funciona, mas **chega 2x por dia** |
-| `dist_areas` | 7 áreas: Pátio, Tapeçaria, Auto Vidros, Tacógrafo, Elétrica, Solda, Acessórios | ✅ |
-| `dist_area_servicop` | Tipo de serviço do ERP → área (automático) | ⚠️ só 6 tipos mapeados |
-| `dist_colaborador_area` | Colaborador → área | ⚠️ só 13 vínculos |
-| `dist_servico` / `dist_servico_colaborador` | Atribuição manual (área, colaboradores, parado, validado) | ✅, mas **quase sem uso** (8 linhas, nenhuma distribuição registrada) |
-| Telas | Lista de Distribuição, Painel do Gestor, Precificação, Config. Áreas | ✅ no ar; presença "trabalhando/pausado" calculada em `src/lib/dist.ts` |
+| **Lista de Distribuição** (`/gestao-servicos/distribuicao`, `DistribuicaoListaTab.tsx`, 756 linhas) | `vw_fb_os_servico` / `vw_fb_os_apontamento`, que chegam **2× por dia**; "Destinar" serviço a serviço (ninguém usava: zero distribuições) | ❌ **Sai.** Vira o novo **Painel do Gestor** (Fase A). |
+| **Painel do Gestor** (`/gestao-servicos/painel`, `PainelGestorTab.tsx`) | Mesmas views 2×/dia; presença calculada no navegador | ❌ **Substituído** pelo novo Painel do Gestor sobre `dist_painel`. |
+| **Precificação** (`/gestao-servicos/precificacao`) | `vw_fb_os_servico` (histórico 6 meses) | ✅ **Fica como está.** Outro propósito: conferir preço × horas do serviço feito. Não depende de "ao vivo". |
+| **Config. Áreas** (`/gestao-servicos/areas`) | `dist_areas`, `dist_area_servicop`, `dist_colaborador_area` | ✅ **Fica e ganha:** tempo padrão por tipo e expediente (Fase C). |
+| — | — | ➕ **TV** `/tv` (pronta). |
+| — | — | ➕ **Consulta por placa** `/placa` (Fase B), no menu e otimizada para celular. |
 
-### Por que "não está funcional"
+**Ordem segura de troca:**
+1. publicar o Painel novo numa rota nova;
+2. o gestor usa uns dias;
+3. trocar o item do menu;
+4. só então apagar `DistribuicaoListaTab.tsx` / `PainelGestorTab.tsx` e o que só eles usam em `src/lib/dist.ts`.
 
-Dois buracos de dado, ambos comprovados em 30/10:
+As tabelas `dist_servico*` **continuam**: o painel novo grava nelas.
 
-1. **Atraso de horas.** A cópia do ERP roda às 04:00 e às 12:30.
-   - Às 15:25 de 30/10, o último apontamento visível era o das 11:59.
-   - Uma TV com 3 horas de atraso mostra gente "trabalhando" que já foi embora. É inútil.
-2. **O "marcado" não é copiado.** A extração só pega o `TBL_FUNCSERV_OS` que já tem apontamento.
-   - O caso do SV2 (marcado, sem hora) **não chega** ao Supabase hoje.
-   - Sem ele, não dá para saber que o SV2 já tem dono.
+## 6. O que falta — fases
 
-3. **"Trabalhando agora" nunca é detectado (bug, achado 30/10).** Quando o colaborador inicia o
-   apontamento sem fechar, o ERP grava `HORA_TERMINO = '00:00'` — **não grava vazio** (trigger
-   `TBL_APONTAMENTO_FUNC_BI`: `if (new.hora_termino is null) then new.hora_termino = '00:00'`).
-   O app testa `!a.hora_termino` (`src/lib/dist.ts:218`, `DistribuicaoListaTab.tsx:173`) → nunca
-   é verdade → ninguém aparece "trabalhando". Em 30/10 havia 16 apontamentos abertos (`00:00`) hoje
-   e 0 nulos. Regra certa: aberto = `hora_termino` nulo **ou** `'00:00'`. É também por isso que a
-   soma de horas do dia sai negativa (00:00 − 08:30).
+### Fase 0 — Ligar a cópia automática (bloqueia tudo) ⏳
+- [ ] Criar a tarefa no servidor (comando no §4.1).
+- [ ] Conferir que `dist_aovivo_estado.atualizado_em` anda a cada 3 min e que a TV some com o selo vermelho.
+- [ ] Pedir a quem cuida da rede **IP fixo** para o SRV-DASHBOARD (`192.168.0.11`).
 
-### Existe "data da última alteração" no Firebird? (pergunta do Leo 30/10)
+### Fase A — Novo Painel do Gestor (substitui Lista + Painel)
+Público simples: **pouca coisa na tela, botões grandes (44 px), sem jargão.**
+- **Topo:** um botão por área, com cor da faixa e tamanho da fila. Clicar filtra.
+- **Por área, a fila** (a mesma do `dist_painel`), um cartão por veículo, com **3 ações grandes**:
+  - **↑ Subir:** passa à frente. Precisa de uma **coluna de prioridade** nova em `dist_servico` (ex.: `prioridade int`), e o `dist_painel` passa a ordenar por prioridade e depois por chegada.
+  - **Quem faz:** a área inteira (padrão), outra área ou pessoas escolhidas. Grava em `dist_servico` / `dist_servico_colaborador`. O motor precisa respeitar "pessoas escolhidas" na hora de mostrar o "com Fulano".
+  - **Pausar** com motivo (aguardando peça / cliente / aprovação): `status_manual = 'parado'`, que o motor já exclui da fila.
+- **Caixa "Precisa de você"** (exceções):
+  - **Sem área:** tipos sem mapa (hoje Ar-condicionado, forro, gerador, digitalização) → botão "definir área", que grava o mapa do tipo e não só o serviço.
+  - **Antigos parados:** botões "reativar" (volta para a fila) ou "ignorar".
+  - **Esquecido aberto:** colaborador com apontamento aberto de outra O.S. → lembrar de fechar no ERP.
+  - **Gente livre com fila na área.**
+- Ao vivo: refetch a cada 1 min, como a TV.
 
-Não serve para isto. Conferido no DDL (`ERP FIREBIRD/ddl_dump.sql`):
-- `TBL_OS.DATA_ATUALIZACAO` existe e o trigger `TBL_OS_BU` grava `'now'` a cada alteração da O.S.
-  — mas o campo é **DATE** (só o dia, sem hora). Diz "mexeram hoje", não "mexeram nos últimos 3 min".
-- `TBL_SERVICO`, `TBL_FUNCSERV_OS` e `TBL_APONTAMENTO_FUNC` **não têm** data de alteração. O log
-  `TBL_LOG` (com `DATA_ALTERACAO` TIMESTAMP) só registra mudança de código/qtd/preço/desconto do
-  serviço e campos comerciais da O.S. — **não** registra OK, marcação nem apontamento.
-- Fechar um apontamento é UPDATE (o código não muda), então "pegar só os códigos novos" também perde
-  o fechamento.
+### Fase B — Consulta por placa (celular) `/placa`
+- Um campo grande; digitou a placa (sem traço, maiúscula), buscou nas `dist_aovivo_*`.
+- Mostra:
+  - veículo, prisma, cliente (sem telefone, por LGPD) e data/hora de entrada;
+  - cada serviço com estado: ✅ **pronto** (OK) / 🔧 **Fulano fazendo há 35 min** (apontamento aberto) / ⏸ **pausado** / 🕒 **na fila (posição N da área)**;
+  - **previsão de pronto:** a soma das horas que faltam na fila da área até este veículo, dividida pelos colaboradores da área, projetada no expediente.
+- Precisa de uma RPC nova `dist_consulta_placa(p_placa)`, que reaproveita a lógica do `dist_painel`.
+- Placa de O.S. fechada não aparece ("nenhuma O.S. aberta para essa placa").
 
-Conclusão: a cópia rápida **relê o conjunto inteiro das O.S. abertas** a cada ciclo (≈150 serviços da
-MLB PR + marcados + apontamentos — poucas centenas de linhas, leitura leve). Não precisa de marca
-d'água. `DATA_ATUALIZACAO = hoje` pode servir de filtro extra para pegar O.S. concluída hoje (para ela
-sair da TV na hora).
+### Fase C — Config. Áreas completa
+- **Tempo padrão por tipo:** a tabela mostra a mediana do histórico; o gestor pode sobrescrever (`dist_tempo_servicop`).
+- **Expediente** editável (`dist_config.expediente`).
+- **Colaborador → área:** a tela já existe. **Decisão do Leo: o gestor faz esse cadastro.**
+  - Hoje há só 13 colaboradores ligados, mas 23 apontaram nos últimos 30 dias.
+  - Sugestão de melhoria: listar no topo "apontou nos últimos 30 dias e não tem área".
+- Criar a área **Ar-condicionado** (ou decidir que ele vai para Elétrica).
 
-Também falta o **motor**: hoje alguém precisa clicar em "Destinar" serviço por serviço, e ninguém faz
-isso (zero distribuições registradas).
+### Fase D — Limpeza
+- Remover as telas antigas (ordem segura no §5).
+- Atualizar `docs/STATUS.md` e o `AppShell` (títulos do menu).
 
-## 4. Números reais (MLB PR, para dimensionar)
+## 7. Decisões tomadas
 
-- **Volume:** de 13 a 16 colaboradores apontam por dia, em 25 a 50 serviços.
-- **Fila:** cerca de 147 serviços em aberto agora.
-- **Tempo típico por tipo** (horas apontadas, últimos 90 dias):
+| Data | Decisão (Leo) |
+|---|---|
+| 30/10 | Fila em **ordem de chegada** da O.S. |
+| 30/10 | Expediente **08:00–12:00 e 13:12–18:00**. |
+| 30/10 | Na TV **não aparece quem está trabalhando**: só os próximos serviços por área e quem está disponível. A TV também orienta a venda. |
+| 30/10 | Login da TV = usuário do Hub com o módulo `loja`. |
+| 30/10 | O cadastro colaborador → área é do **gestor**, em Config. Áreas. |
+| 30/10 | A cópia rápida pode rodar no servidor, **somente O.S. abertas**. |
+| 30/10 | As funções novas **substituem** o que existe hoje no app (§5). |
+| — | Piloto só MLB PR; o colaborador continua no ERP; nada volta para o Firebird. |
 
-| Tipo | Mediana | 80% dos casos até |
-|---|---|---|
-| Tapeçaria | 1,8 h | 4,4 h |
-| Acessórios | 0,4 h | 1,2 h |
-| Auto elétrica | 0,5 h | 1,0 h |
-| Ar-condicionado | 1,5 h | 8,7 h |
-| Auto vidros | 0,4 h | 1,1 h |
-| Tacógrafo | 0,6 h | 1,7 h |
-| Solda/escape | 1,8 h | 3,9 h |
+## 8. Armadilhas
 
-  É a base do "dá para pegar mais hoje?": o padrão de cada tipo sai do histórico, e o gestor pode
-  ajustar.
-- **Lacuna de apontamento:** só cerca de 35 a 50 horas apontadas por dia contra cerca de 100 horas de
-  gente disponível. Ou seja, **muita coisa é feita sem apontar**. A TV vai deixar isso visível (gente
-  "livre há 2 h" que na verdade está trabalhando), o que por si só cobra o apontamento.
+- **Firebird de produção (`192.168.0.5`) é só leitura.** Nenhum CREATE, ALTER, UPDATE ou DELETE, nem view. Campo novo = consulta nova em `bononi-replicador/alvos/`.
+- **No servidor, manda o código do SERVIDOR** (o repo do replicador não tem git nem sincroniza). Antes de mexer: baixar o arquivo do servidor, comparar, fazer backup `.bak-AAAAMMDD`, subir, `node -c`, testar só o alvo.
+- **Não rodar a cópia rápida de dois lugares** ao mesmo tempo (este PC + servidor). É uma fonte só.
+- **Lacuna de apontamento:** só ~35–50 h apontadas por dia contra ~100 h de gente. Quem trabalha sem apontar aparece "livre" na TV. É esperado; a TV acaba cobrando o apontamento.
+- **Frota (ex.: Gazin)** enche a fila da Tapeçaria (2,8 dias em 30/10). A TV agrupa por O.S. para não repetir o prisma.
+- **Push na `main` = produção** (Vercel).
+- **Telas operadas em pé:** controle com 44 px.
 
-## 5. Como vai funcionar (o desenho)
+## 9. Histórico
 
-### 5.1 O motor de sequência (automático)
-
-Para cada área, uma **fila**:
-
-1. **Ordem da fila:**
-   - primeiro, a prioridade manual, se o gestor arrastou ou fixou algo;
-   - depois, a hora de entrada da O.S. (quem chegou primeiro sai primeiro).
-   - Serviços da **mesma O.S.** ficam juntos.
-2. **Quem pode fazer cada serviço:**
-   - por padrão, **qualquer colaborador da área** (área automática pelo tipo de serviço);
-   - o gestor pode trocar por **colaboradores específicos**, ou mandar para outra área.
-3. **Próximos de cada colaborador:**
-   - o motor percorre a fila e reserva para cada pessoa os próximos serviços que ela pode fazer,
-     considerando quando ela deve ficar livre (tempo restante do serviço atual pela estimativa);
-   - mostra os próximos 2 ou 3 de cada pessoa.
-4. **Marcado = já é dele:**
-   - serviço em que o colaborador se marcou no ERP (o SV2) vai para a lista dele, logo depois do atual;
-   - não é oferecido a mais ninguém.
-5. **Recalcula sozinho** a cada atualização de dado (poucos minutos). Começou um apontamento? O serviço
-   sai da fila e vai para "trabalhando". Deu OK? Sai de tudo.
-6. **Gestor só intervém quando quer:** arrastar para o topo, fixar um serviço numa pessoa, mudar a área,
-   ou pausar ("aguardando peça/cliente").
-
-O motor fica no banco (função SQL), não na tela. Assim a TV e o gestor veem **a mesma resposta**.
-
-### 5.2 Capacidade do dia ("dá para pegar mais?")
-
-Por área:
-- **Horas disponíveis hoje** = para cada colaborador da área, quanto falta até o fim do expediente,
-  menos o que falta do serviço atual.
-- **Horas na fila** = soma das estimativas dos serviços que aguardam.
-- **Saldo:** "sobram 6 h hoje" (verde) / "fila de 1,5 dia" (vermelho).
-- Na tela do gestor também aparece **até que hora** a fila atual vai.
-
-### 5.3 TV (`/tv/servicos`)
-
-- Tela cheia, fonte grande, sem menu e sem clique. Atualiza sozinha.
-- **Uma coluna por área.** No topo, a barra de capacidade do dia.
-- **Um cartão por colaborador**, com cor pelo estado:
-  - 🟢 trabalhando: Prisma, O.S., serviço e "há 35 min";
-  - 🟡 pausado: apontou e fechou, mas o serviço continua aberto;
-  - ⚪ livre há X min;
-  - abaixo, os **próximos 2 ou 3** dele.
-- Rodapé: serviços aguardando na fila sem ninguém previsto (sobrou para amanhã).
-
-### 5.4 Tela do gestor
-
-Evolução do Painel do Gestor atual. Sem tela nova no menu.
-- A mesma visão por área da TV, mas mexível:
-  - arrastar para reordenar;
-  - num serviço, "quem pode fazer": a área (padrão) ou colaboradores escolhidos;
-  - fixar numa pessoa;
-  - pausar com motivo.
-- Avisos de exceção, o que exige o gestor:
-  - serviço sem área (tipo não mapeado);
-  - serviço parado há dias;
-  - colaborador livre com fila na área dele.
-- **Config:** tempo padrão por tipo de serviço (já vem preenchido pelo histórico) e expediente por
-  colaborador.
-
-## 6. Ordem de construção
-
-| Fase | Entrega | Depende de |
-|---|---|---|
-| **0. Dado ao vivo** | Nova cópia rápida no servidor, a cada 2–3 min no horário de expediente. Só O.S. **abertas** da MLB PR: serviços + marcados (`TBL_FUNCSERV_OS` sem exigir apontamento) + apontamentos do dia. Volume pequeno (centenas de linhas). Só leitura no Firebird. | OK do Leo para mexer no servidor (SRV-DASHBOARD: backup + diff antes) |
-| **1. Cadastros** | Mapear os tipos de serviço restantes → área; colaboradores → área; tempo padrão por tipo (do histórico); expediente | Fase 0 não é necessária; o gestor confere os mapas |
-| **2. Motor** | Função SQL de fila + próximos + capacidade, com teste em dado real | 0 e 1 |
-| **3. TV** | `/tv/servicos` | 2 + forma de login da TV |
-| **4. Gestor** | Painel do Gestor mexível (arrastar, quem pode, fixar, pausar) | 2 |
-
-Sugestão: Fase 0 e Fase 1 em paralelo. Sem o dado ao vivo, nada do resto é confiável.
-
-## 7. Decisões
-
-Resposta do Leo pendente nas 4 primeiras:
-
-1. **Mexer no servidor para a cópia rápida (Fase 0).** Proposta: a cada 3 min, das 7h às 19h, de segunda
-   a sábado.
-2. **Login da TV.** A TV precisa entrar sem ninguém digitar senha todo dia. Proposta: um usuário "TV
-   Oficina" no Hub, só com acesso a essa tela, logado uma vez no navegador da TV.
-3. **Ordem padrão da fila.** Proposta: chegada da O.S. (primeiro que entra, primeiro que sai). A
-   alternativa é priorizar o cliente que está esperando na loja (precisaria de um marcador).
-4. **Expediente.** Horário padrão da oficina (ex.: 8h–18h com almoço 12h–13h30)? Muda por pessoa?
-5. Já decidido: só MLB PR no piloto (como o resto do módulo); o colaborador continua se lançando no ERP;
-   nada volta para o Firebird.
-
-## 8. Andamento
-
-### 30/10/2026 — Fase 0 (dado ao vivo) construída; falta agendar no servidor
-- **Leo aprovou** seguir com o banco e com o login de TV.
-- **Tabelas novas no Supabase** (migration `dist_aovivo_tabelas`), todas só com leitura para usuário logado:
-  - `dist_aovivo_servico`: serviços das O.S. abertas + as concluídas hoje, de todas as empresas;
-  - `dist_aovivo_marcacao`: `TBL_FUNCSERV_OS` **com ou sem** apontamento, o SV2 "marcado";
-  - `dist_aovivo_apontamento`: com a coluna `aberto` (término nulo ou `00:00`);
-  - `dist_aovivo_estado`: hora da última cópia e contagens.
-- **Gravação.** Só a RPC `dist_aovivo_carregar` grava (service_role).
-  - Ela apaga e regrava as 3 tabelas numa transação só, então a TV nunca vê a cópia pela metade.
-  - Trava: se vier 0 serviço, aborta sem apagar.
-- **Lander.** `bononi-replicador/land-dist-aovivo.js` + `alvos/dist_aovivo.js` + `run-dist-aovivo.bat`. Por que tabelas e lander próprios:
-  - não usa a staging do `refresh-all` (regra "1 fonte por tabela");
-  - não briga com o `diario`.
-- **Testado deste PC contra a produção (só leitura):** 754 serviços, 554 marcações, 652 apontamentos, em cerca de 1,5 s.
-- **Achado no dado.** O mesmo colaborador pode ter **vários apontamentos abertos ao mesmo tempo**: Ricardo (tacógrafo) tinha 3 abertos desde 08:22, em prismas diferentes.
-  - SV1 + SV2 abertos juntos na mesma O.S. = normal.
-  - Apontamento antigo esquecido aberto = comum.
-  - **Regra para a TV:** o "atual" da pessoa é o apontamento aberto mais recente. Os outros abertos da mesma O.S. aparecem juntos; os de O.S. antiga contam como "esquecido aberto" (aviso no gestor).
-- **PENDENTE: agendar.** O SRV-DASHBOARD não respondeu SSH em 30/10 (porta 22 com timeout).
-  - Quando responder, subir os 3 arquivos (são novos, não sobrescrevem nada) e criar a tarefa `BononiDistAoVivo`: a cada 3 min, das 07h às 19h, de segunda a sábado.
-  - Enquanto isso, a cópia só roda manualmente (`node land-dist-aovivo.js`).
-  - Tentei criar uma tarefa temporária no PC de dev; ela foi bloqueada pela permissão do Claude Code, e é melhor assim: deve ser 1 fonte só, no servidor.
-- **Bug corrigido e publicado** (`3ea4d3b`): o app considerava "trabalhando" só quando o término estava vazio, e o ERP grava `00:00`. Helper `apontamentoAberto()` em `src/lib/dist.ts`.
-
-### Desenho das telas combinado (esboço mostrado ao Leo em 30/10)
-- **TV:**
-  - colunas por área;
-  - barra de capacidade no topo de cada área. É o **recado para o vendedor**: verde = dá para vender serviço para hoje; amarelo = só se for rápido; vermelho = só para amanhã;
-  - cartão por colaborador (trabalhando / pausado / livre há X min) com os próximos dele.
-- **Gestor:** público simples, então **3 ações grandes por serviço**: ↑ Subir, Quem faz (a área inteira ou pessoas escolhidas), Pausar (com motivo). No topo, os botões das áreas com o tamanho da fila, e avisos de exceção (sem área, esquecido aberto).
-- **Celular, consulta por placa:**
-  - campo grande de placa;
-  - mostra veículo, prisma e entrada, e cada serviço: pronto / quem está fazendo e há quanto tempo / na fila;
-  - mostra a previsão de pronto.
-
-### 30/10/2026 (2) — decisões do Leo + motor + TV publicados
-- **Decisões do Leo:**
-  - fila em **ordem de chegada** da O.S.;
-  - expediente **08:00–12:00 e 13:12–18:00** (`dist_config.expediente`; 8,8 h por dia);
-  - na **TV não aparece quem está trabalhando**: só os **próximos serviços de cada área** e **quem está disponível**;
-  - a TV também serve para o vendedor saber quanto serviço pode pegar.
-- **Motor = RPC `dist_painel(p_empresa)`** (migration `supabase/migrations/20261030180000_dist_painel.sql`, estado final). Ele devolve, por área:
-  - a fila;
-  - os disponíveis;
-  - `fila_horas` × `capacidade_horas`.
-  - **Área de cada serviço:** a decisão do gestor (`dist_servico`), senão o mapa do tipo de serviço.
-  - **Tempo de cada serviço:** `dist_tempo_servicop` (ajuste manual), senão a mediana dos últimos 180 dias para o tipo (mínimo 5 casos), senão 1 h. Serviço já começado conta só o que falta (mínimo 15 min).
-  - **Capacidade:** colaboradores da área × horas que restam do expediente, menos o que falta dos serviços em que eles estão com apontamento aberto hoje.
-  - **"Antigo parado":** O.S. com mais de 7 dias (`dist_config.dias_antigo`) e nenhum apontamento nesse prazo **sai da fila** e vai para a lista `antigos`, para o gestor resolver. Em 30/10 eram 36 serviços, de O.S. de fevereiro a outubro que nunca foram concluídas no ERP; na TV elas entupiam a fila.
-- **TV = rota `/tv`** (`src/pages/TvServicos.tsx`): tela cheia, fora do menu.
-  - Mostra 6 áreas (só as que têm equipe ou fila), cada uma com:
-    - a **faixa do vendedor** (`lotacaoArea()` em `src/lib/dist.ts`): verde "Cabe +Xh hoje" / amarelo "Só serviço rápido hoje" / vermelho "Cheio hoje — só amanhã" ou "Fila de X dias";
-    - os disponíveis, com há quanto tempo estão livres;
-    - os **3 próximos veículos**: a fila é agrupada por O.S., porque a frota chega com 5 a 10 serviços na mesma O.S.
-  - Atualiza a cada 1 min.
-  - Se a cópia do ERP passar de 15 min sem atualizar, aparece o selo vermelho "Sem atualização há X".
-  - O tamanho da letra acompanha a altura da TV. Testado em 1920×1080 e 1366×768, nada corta.
-- **Login da TV:** criar no Hub um usuário (ex.: "TV Oficina") com o módulo **`loja`**, abrir `https://bononiloja.vercel.app/tv` na TV uma vez e entrar.
-  - A sessão fica salva no navegador.
-  - Limite conhecido: esse usuário enxerga o app da loja inteiro. Para restringir só à TV, seria preciso criar um módulo novo no Hub — fica para depois, se o Leo quiser.
-- **Acento quebrado na cópia rápida** ("SERVI�OS"): o node-firebird 1.x com o encoding padrão (UTF8) estraga o texto do ERP. O lander agora conecta com `encoding: 'WIN1252'`. A `lib/firebird.js` compartilhada não foi mexida.
-- **Dados de 30/10 às 16h:**
-  - Tapeçaria com 48 serviços na fila (≈98 h, fila de 2,8 dias, quase tudo de frota da Gazin);
-  - Elétrica e Auto Vidros com folga;
-  - Tacógrafo, Solda e Acessórios cheios até o fim do dia.
-- **Cadastros que faltam** (o gestor resolve na tela Config. Áreas):
-  - o tipo **Ar-condicionado** (e alguns raros: forro, gerador, digitalização) não tem área. Existe a área "Elétrica", mas não existe "Ar-condicionado";
-  - **13 colaboradores** estão ligados a área, mas **23 apontaram** nos últimos 30 dias. Quem não está ligado a nenhuma área não aparece como disponível.
-- **Próximo:** tela do gestor (Subir / Quem faz / Pausar + antigos + sem área) e consulta por placa no celular.
-
-### 30/10/2026 (3) — servidor
-- **Por que o SSH não respondia:** o SRV-DASHBOARD **mudou de IP**, de `192.168.0.8` para `192.168.0.11`. É a mesma máquina: a impressão digital da chave SSH é igual. A doc do replicador (`SERVIDOR_PRODUCAO.md`) foi atualizada.
-- **Arquivos subidos e testados no servidor:** `land-dist-aovivo.js`, `alvos/dist_aovivo.js` e `run-dist-aovivo.bat`. São arquivos novos e não sobrescrevem nada. O teste rodou em 1,5 s, com host SRV-DASHBOARD.
-- **Falta criar a tarefa `BononiDistAoVivo3min`:** a cada 3 min, das 07h às 19h, de segunda a sábado, como SISTEMA. A permissão do Claude Code bloqueia criar tarefa no servidor sem o OK explícito do Leo.
-- **Cadastro (decisão do Leo 30/10):** o gestor liga cada colaborador à sua área em Config. Áreas.
+- **25–26/08:** primeira versão (Lista de Distribuição, Painel, Precificação, Config. Áreas) sobre as views 2×/dia. Ficou sem uso: dado atrasado em horas, o "marcado" sem apontamento não era copiado, e o bug do `00:00` impedia ver alguém trabalhando.
+- **30/10:** correção do `00:00` (`3ea4d3b`); cópia rápida + motor `dist_painel` + TV `/tv` (`ad5f93d`); servidor achado no IP novo; cópia restrita a O.S. abertas; plano reescrito para passagem ao Gustavo.
