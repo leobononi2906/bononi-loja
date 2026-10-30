@@ -233,3 +233,38 @@ Resposta do Leo pendente nas 4 primeiras:
   - campo grande de placa;
   - mostra veículo, prisma e entrada, e cada serviço: pronto / quem está fazendo e há quanto tempo / na fila;
   - mostra a previsão de pronto.
+
+### 30/10/2026 (2) — decisões do Leo + motor + TV publicados
+- **Decisões do Leo:**
+  - fila em **ordem de chegada** da O.S.;
+  - expediente **08:00–12:00 e 13:12–18:00** (`dist_config.expediente`; 8,8 h por dia);
+  - na **TV não aparece quem está trabalhando**: só os **próximos serviços de cada área** e **quem está disponível**;
+  - a TV também serve para o vendedor saber quanto serviço pode pegar.
+- **Motor = RPC `dist_painel(p_empresa)`** (migration `supabase/migrations/20261030180000_dist_painel.sql`, estado final). Ele devolve, por área:
+  - a fila;
+  - os disponíveis;
+  - `fila_horas` × `capacidade_horas`.
+  - **Área de cada serviço:** a decisão do gestor (`dist_servico`), senão o mapa do tipo de serviço.
+  - **Tempo de cada serviço:** `dist_tempo_servicop` (ajuste manual), senão a mediana dos últimos 180 dias para o tipo (mínimo 5 casos), senão 1 h. Serviço já começado conta só o que falta (mínimo 15 min).
+  - **Capacidade:** colaboradores da área × horas que restam do expediente, menos o que falta dos serviços em que eles estão com apontamento aberto hoje.
+  - **"Antigo parado":** O.S. com mais de 7 dias (`dist_config.dias_antigo`) e nenhum apontamento nesse prazo **sai da fila** e vai para a lista `antigos`, para o gestor resolver. Em 30/10 eram 36 serviços, de O.S. de fevereiro a outubro que nunca foram concluídas no ERP; na TV elas entupiam a fila.
+- **TV = rota `/tv`** (`src/pages/TvServicos.tsx`): tela cheia, fora do menu.
+  - Mostra 6 áreas (só as que têm equipe ou fila), cada uma com:
+    - a **faixa do vendedor** (`lotacaoArea()` em `src/lib/dist.ts`): verde "Cabe +Xh hoje" / amarelo "Só serviço rápido hoje" / vermelho "Cheio hoje — só amanhã" ou "Fila de X dias";
+    - os disponíveis, com há quanto tempo estão livres;
+    - os **3 próximos veículos**: a fila é agrupada por O.S., porque a frota chega com 5 a 10 serviços na mesma O.S.
+  - Atualiza a cada 1 min.
+  - Se a cópia do ERP passar de 15 min sem atualizar, aparece o selo vermelho "Sem atualização há X".
+  - O tamanho da letra acompanha a altura da TV. Testado em 1920×1080 e 1366×768, nada corta.
+- **Login da TV:** criar no Hub um usuário (ex.: "TV Oficina") com o módulo **`loja`**, abrir `https://bononiloja.vercel.app/tv` na TV uma vez e entrar.
+  - A sessão fica salva no navegador.
+  - Limite conhecido: esse usuário enxerga o app da loja inteiro. Para restringir só à TV, seria preciso criar um módulo novo no Hub — fica para depois, se o Leo quiser.
+- **Acento quebrado na cópia rápida** ("SERVI�OS"): o node-firebird 1.x com o encoding padrão (UTF8) estraga o texto do ERP. O lander agora conecta com `encoding: 'WIN1252'`. A `lib/firebird.js` compartilhada não foi mexida.
+- **Dados de 30/10 às 16h:**
+  - Tapeçaria com 48 serviços na fila (≈98 h, fila de 2,8 dias, quase tudo de frota da Gazin);
+  - Elétrica e Auto Vidros com folga;
+  - Tacógrafo, Solda e Acessórios cheios até o fim do dia.
+- **Cadastros que faltam** (o gestor resolve na tela Config. Áreas):
+  - o tipo **Ar-condicionado** (e alguns raros: forro, gerador, digitalização) não tem área. Existe a área "Elétrica", mas não existe "Ar-condicionado";
+  - **13 colaboradores** estão ligados a área, mas **23 apontaram** nos últimos 30 dias. Quem não está ligado a nenhuma área não aparece como disponível.
+- **Próximo:** tela do gestor (Subir / Quem faz / Pausar + antigos + sem área) e consulta por placa no celular.

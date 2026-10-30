@@ -22,6 +22,7 @@ import GestaoDistribuicao from "./pages/GestaoDistribuicao";
 import GestaoPainel from "./pages/GestaoPainel";
 import GestaoPrecificacao from "./pages/GestaoPrecificacao";
 import GestaoAreas from "./pages/GestaoAreas";
+import TvServicos from "./pages/TvServicos";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -63,6 +64,8 @@ function Gate() {
           <Route path="/gestao-servicos/precificacao" element={<GestaoPrecificacao />} />
           <Route path="/gestao-servicos/areas" element={<GestaoAreas />} />
         </Route>
+        {/* TV da oficina: tela cheia, fora do AppShell (sem menu). */}
+        <Route path="/tv" element={<TvServicos />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

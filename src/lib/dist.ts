@@ -260,3 +260,91 @@ export function limparObservacao(obs: string | null | undefined): string | null 
   const texto = obs.trimStart().startsWith("{\\rtf") ? rtfParaTexto(obs) : obs;
   return texto || null;
 }
+
+// ─── PAINEL AUTOMÁTICO (TV + gestor) — RPC dist_painel, desde 30/10/2026 ─────
+// Fonte: cópia rápida dist_aovivo_* (O.S. abertas, ~3 min). Fila em ordem de chegada da O.S.
+// (decisão do Leo 30/10). Regras e porquês: docs/PLANO_DISTRIBUICAO_AUTOMATICA.md.
+export interface PainelFilaItem {
+  pos: number;
+  id_servico: number;
+  id_os: number;
+  prisma: string | null;
+  placa: string | null;
+  modelo: string | null;
+  cliente: string | null;
+  servico: string | null;
+  obs: string | null;
+  chegada: string;
+  horas: number;
+  iniciado: boolean;
+  marcado_para: string | null;
+}
+
+export interface PainelDisponivel {
+  id: number;
+  nome: string | null;
+  livre_desde: string; // "HH:MM" de hoje
+}
+
+export interface PainelArea {
+  id: number;
+  nome: string;
+  colaboradores: number;
+  em_andamento: number;
+  parados: number;
+  antigos: number;
+  fila_qtd: number;
+  fila_horas: number;
+  capacidade_horas: number;
+  fila: PainelFilaItem[];
+  disponiveis: PainelDisponivel[];
+}
+
+export interface Painel {
+  atualizado_em: string | null;
+  horas_restantes_hoje: number;
+  areas: PainelArea[];
+  sem_area: { id_servico: number; prisma: string | null; servico: string | null; obs: string | null; chegada: string }[];
+  antigos: { id_servico: number; id_os: number; prisma: string | null; placa: string | null; servico: string | null; obs: string | null; id_area: number | null; ult_apont: string | null; chegada: string }[];
+}
+
+export async function buscarPainel(): Promise<Painel> {
+  const { data, error } = await db.rpc("dist_painel", { p_empresa: EMPRESA_MLB_PR });
+  if (error) throw error;
+  return data as Painel;
+}
+
+// Horas de um dia inteiro de expediente (config dist_config.expediente; 8,8 h em 30/10).
+export async function buscarHorasDia(): Promise<number> {
+  const { data, error } = await db.rpc("dist_horas_restantes_hoje", { p_agora: "00:00" });
+  if (error) throw error;
+  return Number(data) || 8;
+}
+
+export type Lotacao = "verde" | "amarelo" | "vermelho" | "sem_equipe";
+
+// Recado da área para o vendedor: dá para vender serviço para hoje?
+//   verde    = sobra ≥ 1 h de gente até o fim do expediente → "Cabe +Xh hoje"
+//   amarelo  = sobra entre 0 e 1 h → "Só serviço rápido hoje"
+//   vermelho = a fila passa de hoje → "Fila de X dias"
+export function lotacaoArea(a: PainelArea, horasDia: number): { cor: Lotacao; texto: string } {
+  if (a.colaboradores === 0) return { cor: "sem_equipe", texto: "Sem equipe cadastrada" };
+  const saldo = a.capacidade_horas - a.fila_horas;
+  if (saldo >= 1) return { cor: "verde", texto: `Cabe +${fmtHoras(saldo)} hoje` };
+  if (saldo >= 0) return { cor: "amarelo", texto: "Só serviço rápido hoje" };
+  const dias = a.fila_horas / (a.colaboradores * horasDia);
+  const txt = dias < 1 ? "Cheio hoje — só amanhã" : `Fila de ${dias.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} dias`;
+  return { cor: "vermelho", texto: txt };
+}
+
+// Minutos desde "HH:MM" de hoje (hora local do navegador). Negativo vira 0.
+export function minutosDesde(hhmm: string, agora = new Date()): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  if (Number.isNaN(h)) return 0;
+  return Math.max(0, agora.getHours() * 60 + agora.getMinutes() - (h * 60 + (m || 0)));
+}
+
+export function primeiroNome(nome: string | null | undefined): string {
+  const p = (nome ?? "").trim().split(/\s+/)[0] ?? "";
+  return p ? p.charAt(0) + p.slice(1).toLowerCase() : "—";
+}
