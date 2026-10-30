@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Search, Plus, Trash2, Printer, RefreshCw, AlertTriangle, CheckCircle2, Tag, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import GondolaRankingTab from "@/components/dashboard/GondolaRankingTab";
 
 interface GondolaItem {
   id: number;
@@ -209,8 +210,38 @@ function PainelBusca({
   );
 }
 
-// ─── Componente principal ──────────────────────────────────────────────
+// ─── Subabas: Etiquetas (preço da etiqueta) e Ranking (quanto vende) ───
+const SUBABAS = [
+  { id: "etiquetas", label: "Etiquetas" },
+  { id: "ranking", label: "Ranking" },
+] as const;
+type Subaba = typeof SUBABAS[number]["id"];
+
 export default function GondolaLoja() {
+  const [aba, setAba] = useState<Subaba>(() => {
+    try { return localStorage.getItem("gondola:aba") === "ranking" ? "ranking" : "etiquetas"; } catch { return "etiquetas"; }
+  });
+  function trocar(a: Subaba) {
+    setAba(a);
+    try { localStorage.setItem("gondola:aba", a); } catch { /* sem storage: só não lembra a aba */ }
+  }
+  return (
+    <div className="dashboard-section space-y-4 p-4 sm:p-6">
+      <div className="inline-flex rounded-lg border overflow-hidden" role="tablist">
+        {SUBABAS.map(s => (
+          <button key={s.id} role="tab" aria-selected={aba === s.id} onClick={() => trocar(s.id)}
+            className={`h-11 px-5 text-sm font-medium ${aba === s.id ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+      {aba === "ranking" ? <GondolaRankingTab /> : <GondolaEtiquetas />}
+    </div>
+  );
+}
+
+// ─── Etiquetas (a tela original da Gôndola) ────────────────────────────
+function GondolaEtiquetas() {
   const qc = useQueryClient();
   const [painelAberto, setPainelAberto] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
@@ -313,7 +344,7 @@ export default function GondolaLoja() {
   }, []);
 
   return (
-    <div className="dashboard-section space-y-4 p-4 sm:p-6">
+    <div className="space-y-4">
       {/* Cards resumo */}
       <div className="grid grid-cols-3 gap-3">
         <div className="metric-card border-l-4" style={{ borderLeftColor: "hsl(var(--primary))" }}>
