@@ -196,3 +196,40 @@ Resposta do Leo pendente nas 4 primeiras:
 4. **Expediente.** Horário padrão da oficina (ex.: 8h–18h com almoço 12h–13h30)? Muda por pessoa?
 5. Já decidido: só MLB PR no piloto (como o resto do módulo); o colaborador continua se lançando no ERP;
    nada volta para o Firebird.
+
+## 8. Andamento
+
+### 30/10/2026 — Fase 0 (dado ao vivo) construída; falta agendar no servidor
+- **Leo aprovou** seguir com o banco e com o login de TV.
+- **Tabelas novas no Supabase** (migration `dist_aovivo_tabelas`), todas só com leitura para usuário logado:
+  - `dist_aovivo_servico`: serviços das O.S. abertas + as concluídas hoje, de todas as empresas;
+  - `dist_aovivo_marcacao`: `TBL_FUNCSERV_OS` **com ou sem** apontamento, o SV2 "marcado";
+  - `dist_aovivo_apontamento`: com a coluna `aberto` (término nulo ou `00:00`);
+  - `dist_aovivo_estado`: hora da última cópia e contagens.
+- **Gravação.** Só a RPC `dist_aovivo_carregar` grava (service_role).
+  - Ela apaga e regrava as 3 tabelas numa transação só, então a TV nunca vê a cópia pela metade.
+  - Trava: se vier 0 serviço, aborta sem apagar.
+- **Lander.** `bononi-replicador/land-dist-aovivo.js` + `alvos/dist_aovivo.js` + `run-dist-aovivo.bat`. Por que tabelas e lander próprios:
+  - não usa a staging do `refresh-all` (regra "1 fonte por tabela");
+  - não briga com o `diario`.
+- **Testado deste PC contra a produção (só leitura):** 754 serviços, 554 marcações, 652 apontamentos, em cerca de 1,5 s.
+- **Achado no dado.** O mesmo colaborador pode ter **vários apontamentos abertos ao mesmo tempo**: Ricardo (tacógrafo) tinha 3 abertos desde 08:22, em prismas diferentes.
+  - SV1 + SV2 abertos juntos na mesma O.S. = normal.
+  - Apontamento antigo esquecido aberto = comum.
+  - **Regra para a TV:** o "atual" da pessoa é o apontamento aberto mais recente. Os outros abertos da mesma O.S. aparecem juntos; os de O.S. antiga contam como "esquecido aberto" (aviso no gestor).
+- **PENDENTE: agendar.** O SRV-DASHBOARD não respondeu SSH em 30/10 (porta 22 com timeout).
+  - Quando responder, subir os 3 arquivos (são novos, não sobrescrevem nada) e criar a tarefa `BononiDistAoVivo`: a cada 3 min, das 07h às 19h, de segunda a sábado.
+  - Enquanto isso, a cópia só roda manualmente (`node land-dist-aovivo.js`).
+  - Tentei criar uma tarefa temporária no PC de dev; ela foi bloqueada pela permissão do Claude Code, e é melhor assim: deve ser 1 fonte só, no servidor.
+- **Bug corrigido e publicado** (`3ea4d3b`): o app considerava "trabalhando" só quando o término estava vazio, e o ERP grava `00:00`. Helper `apontamentoAberto()` em `src/lib/dist.ts`.
+
+### Desenho das telas combinado (esboço mostrado ao Leo em 30/10)
+- **TV:**
+  - colunas por área;
+  - barra de capacidade no topo de cada área. É o **recado para o vendedor**: verde = dá para vender serviço para hoje; amarelo = só se for rápido; vermelho = só para amanhã;
+  - cartão por colaborador (trabalhando / pausado / livre há X min) com os próximos dele.
+- **Gestor:** público simples, então **3 ações grandes por serviço**: ↑ Subir, Quem faz (a área inteira ou pessoas escolhidas), Pausar (com motivo). No topo, os botões das áreas com o tamanho da fila, e avisos de exceção (sem área, esquecido aberto).
+- **Celular, consulta por placa:**
+  - campo grande de placa;
+  - mostra veículo, prisma e entrada, e cada serviço: pronto / quem está fazendo e há quanto tempo / na fila;
+  - mostra a previsão de pronto.
