@@ -268,3 +268,9 @@ Resposta do Leo pendente nas 4 primeiras:
   - o tipo **Ar-condicionado** (e alguns raros: forro, gerador, digitalização) não tem área. Existe a área "Elétrica", mas não existe "Ar-condicionado";
   - **13 colaboradores** estão ligados a área, mas **23 apontaram** nos últimos 30 dias. Quem não está ligado a nenhuma área não aparece como disponível.
 - **Próximo:** tela do gestor (Subir / Quem faz / Pausar + antigos + sem área) e consulta por placa no celular.
+
+### 30/10/2026 (3) — servidor
+- **Por que o SSH não respondia:** o SRV-DASHBOARD **mudou de IP**, de `192.168.0.8` para `192.168.0.11`. É a mesma máquina: a impressão digital da chave SSH é igual. A doc do replicador (`SERVIDOR_PRODUCAO.md`) foi atualizada.
+- **Arquivos subidos e testados no servidor:** `land-dist-aovivo.js`, `alvos/dist_aovivo.js` e `run-dist-aovivo.bat`. São arquivos novos e não sobrescrevem nada. O teste rodou em 1,5 s, com host SRV-DASHBOARD.
+- **Falta criar a tarefa `BononiDistAoVivo3min`:** a cada 3 min, das 07h às 19h, de segunda a sábado, como SISTEMA. A permissão do Claude Code bloqueia criar tarefa no servidor sem o OK explícito do Leo.
+- **Cadastro (decisão do Leo 30/10):** o gestor liga cada colaborador à sua área em Config. Áreas.
